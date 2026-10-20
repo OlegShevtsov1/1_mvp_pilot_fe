@@ -1,16 +1,33 @@
 # Pilot Frontend
 
+React 18 + Vite 6 + TypeScript single-page app for the Pilot project: the browser client of the
+[1_mvp_pilot_be](https://github.com/OlegShevtsov1/1_mvp_pilot_be) REST API (projects and tasks). One Docker image
+(nginx serving the built bundle) runs in every environment; the backend URL, the error-reporting DSN and the
+environment name are read when the container starts, never baked into the bundle. The delivery process that
+built and deploys it (Claude Code plugins and the Archon factory) is in
+[1_mvp_sdlc](https://github.com/OlegShevtsov1/1_mvp_sdlc).
+
 ## Live
 
 - **Production app:** <https://app.pilot.up.km.ua>
 - **Dev app:** <https://app.dev.pilot.up.km.ua>
-- **Backend API (prod):** <https://pilot.up.km.ua/health> · repo [1_mvp_pilot_be](https://github.com/OlegShevtsov1/1_mvp_pilot_be)
-- **SDLC tooling:** [1_mvp_sdlc](https://github.com/OlegShevtsov1/1_mvp_sdlc)
+- **Backend API (prod):** <https://pilot.up.km.ua/health> · Swagger <https://pilot.up.km.ua/api-docs/index.html>
 
-React + Vite + TypeScript frontend for the Pilot project. One Docker image
-(nginx serving the built bundle) runs in every environment; the backend URL,
-the error-reporting DSN and the environment name are read when the container
-starts, never baked into the bundle.
+## Architecture
+
+The SPA talks only to the backend API (`API_URL` from `/config.js`); browser errors are sent through the
+backend's `/api/errors` tunnel to GlitchTip, so no third-party host is contacted from the page. The C4 container
+diagram, module inventory, conventions and known technical debt are in
+[docs/architecture-map.md](docs/architecture-map.md); the domain glossary is [CONTEXT.md](CONTEXT.md).
+
+## Deployment
+
+One image per commit, built once by CI and promoted to production unchanged. Kamal 2 runs it as `pilot-fe-dev`
+on the dev host (every merge into `develop` deploys automatically after Front CI, see [Deploy (dev)](#deploy-dev))
+and as `pilot-fe` on the prod host, deployed only from an annotated release tag `vX.Y.Z` on `main` after the
+matching backend release is live (see [Deploy (prod)](#deploy-prod) and
+[Releases and hotfixes](#releases-and-hotfixes)). Each deploy waits for `/health` and the expected `/config.js`;
+production is watched for ten minutes afterwards and can be rolled back from the console or GitHub Actions.
 
 ## Requirements
 
@@ -119,10 +136,10 @@ default.
 It runs when a pull request is opened, reopened, marked ready for review,
 pushed to (`synchronize`, also the push after "changes requested") or gets a
 review request. It skips `archon/task-factory-*` heads (the factory reviews its
-own pull requests, Р-C5), Dependabot, drafts and the release pull request
+own pull requests, decision R-C5), Dependabot, drafts and the release pull request
 `develop → main`.
 
-The review uses Sonnet (Р-C12), at most 20 turns and read-only tools: the
+The review uses Sonnet (decision R-C12), at most 20 turns and read-only tools: the
 model cannot write files or post to GitHub. It returns its findings as
 structured output, and `scripts/ai-review-report.sh` posts them as one
 `AI review` comment (updated in place on later runs) whose third line is

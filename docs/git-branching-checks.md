@@ -136,7 +136,7 @@ gh api -X PATCH repos/OlegShevtsov1/1_mvp_pilot_fe -f squash_merge_commit_title=
 ```bash
 gh repo view OlegShevtsov1/1_mvp_pilot_fe --json visibility --jq .visibility
 ```
-**Expected:** `PRIVATE` → this step is **DEFERRED to PUB Крок 7**. GitHub Free answers branch protection on a
+**Expected:** `PRIVATE` → this step is **DEFERRED to PUB step 7**. GitHub Free answers branch protection on a
 private repository with `403 Upgrade to GitHub Pro or make this repository public`; do not look for a workaround.
 Record DEFERRED and move on. `PUBLIC` → run:
 ```bash
@@ -160,11 +160,11 @@ plugin's `block-main-push` to `develop` is not in S3b as written; file it as a f
 
 **A11 — bookkeeping: Trello, Notion, execution log.**
 The C3b card (label `run`) → `Done`, with a comment linking this PR and the verdicts of A0–A10. Record the A2
-`headBranch headSha` observation, and A9 as applied or deferred to PUB Крок 7. The Notion page "Execution log —
+`headBranch headSha` observation, and A9 as applied or deferred to PUB step 7. The Notion page "Execution log —
 C3b" and the C3b execution log of the SDLC addendum record the same. Follow-up cards:
 1. The factory engine refuses or only notifies for a PR with base `main` (decision 27).
 2. `block-main-push` in `mvp-sdlc` also protects `develop` (decision 27).
-3. PUB Крок 7: `main-guard`/`develop-guard` cannot be required PR checks (push-only).
+3. PUB step 7: `main-guard`/`develop-guard` cannot be required PR checks (push-only).
 4. PR conventions for Dependabot PRs and for release PRs `develop → main` (C5).
 5. If A2 showed the default branch as `headBranch`: the backend's `bin/wait-dev-deploy` (C2b) needs the
    display-title match of this PR.

@@ -129,6 +129,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    outputs:
+      zones: ${{ steps.dns.outputs.zones }}
     env:
       TAG: ${{ needs.guard.outputs.tag }}
       VERSION: ${{ needs.guard.outputs.version }}
@@ -179,9 +181,16 @@ jobs:
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
+      - name: VPN DNS zones (mvp and the zone in config/project.env)
+        id: dns
+        run: source deploy/lib.sh && load_project_env && echo "zones=mvp.up.km.ua,$PROJECT_ZONE" >> "$GITHUB_OUTPUT"
+
       - uses: OlegShevtsov1/1_mvp_infra/.github/actions/vpn-up@env/dev
         with:
           ovpn: ${{ secrets.VPN_CI_OVPN }}
+          ci-vpn-ip: ${{ secrets.CI_VPN_IP }}
+          dev-host: ${{ secrets.DEV_HOST }}
+          dns-zones: ${{ steps.dns.outputs.zones }}
 
       - name: Check that prod is reachable over the VPN
         env:
@@ -277,6 +286,9 @@ jobs:
       - uses: OlegShevtsov1/1_mvp_infra/.github/actions/vpn-up@env/dev
         with:
           ovpn: ${{ secrets.VPN_CI_OVPN }}
+          ci-vpn-ip: ${{ secrets.CI_VPN_IP }}
+          dev-host: ${{ secrets.DEV_HOST }}
+          dns-zones: ${{ needs.deploy.outputs.zones }}
 
       - name: Watch prod
         id: watch

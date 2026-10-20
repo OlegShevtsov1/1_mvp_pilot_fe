@@ -1,23 +1,34 @@
 #!/usr/bin/env bash
-# Enforces the TDD commit order of a pull request (R-C3) when it changes code (non-test
-# files under src/ bin/ deploy/ scripts/ docker/):
+# Enforces the TDD commit order of a pull request (R-C3) when it changes code (non-test,
+# non-Markdown files under src/ bin/ deploy/ scripts/ docker/):
 #   1. the first commit is test(...), and its tests fail (RED);
 #   2. a later feat(...) or fix(...) commit follows;
 #   3. tests (tests/ and *.test.* files under those directories) do not change between
 #      those two commits.
 # GitHub runs CI only on the pushed head, so RED is reproduced here (npm ci && npm test at
 # the test commit) and recorded on that commit as the failing status tdd-check/red.
-# Env: BASE_REF (e.g. main), HEAD_SHA (40 hex), REPO (owner/name); GH_TOKEN for gh.
+# Not applicable to the release PR develop → main (HEAD_REF develop, BASE_REF main); commits
+# already on origin/main (a back-merge after a hotfix) were checked there and are skipped.
+# Env: BASE_REF (e.g. main), HEAD_SHA (40 hex), REPO (owner/name), HEAD_REF (optional);
+# GH_TOKEN for gh.
 # Exit 0: order kept or not applicable. Exit 1: order broken. Exit 2: bad input or tool error.
 set -uo pipefail
 base_ref=${BASE_REF:-}
 head_sha=${HEAD_SHA:-}
 repo=${REPO:-}
+head_ref=${HEAD_REF:-}
 
 [[ "${base_ref}" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "tdd-check: invalid BASE_REF '${base_ref}'" >&2; exit 2; }
 [[ "${head_sha}" =~ ^[0-9a-f]{40}$ ]] || { echo "tdd-check: invalid HEAD_SHA" >&2; exit 2; }
 [[ "${repo}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "tdd-check: invalid REPO '${repo}'" >&2; exit 2; }
+
+if [ "${head_ref}" = develop ] && [ "${base_ref}" = main ]; then
+  echo "tdd-check: not applicable (release PR develop → main)"
+  exit 0
+fi
+
 base="origin/${base_ref}"
+main_ref=origin/main
 test_subject='^test\('
 code_subject='^(feat|fix)[(!:]'
 code_path='^(src|bin|deploy|scripts|docker)/'
@@ -31,9 +42,18 @@ fail() {
 commits=$(git rev-list --reverse --no-merges "${base}..${head_sha}") || exit 2
 [ -n "${commits}" ] || { echo "tdd-check: no commits between ${base} and ${head_sha}" >&2; exit 2; }
 
-changed=$(git diff --name-only "${base}...${head_sha}") || exit 2
-if ! grep -E "${code_path}" <<<"${changed}" | grep -qvE "${test_path}"; then
-  echo "tdd-check: not applicable (no code under src/ bin/ deploy/ scripts/ docker/ changed)"
+git rev-parse --verify --quiet "${main_ref}^{commit}" >/dev/null \
+  || { echo "tdd-check: ${main_ref} does not resolve" >&2; exit 2; }
+commits=$(git rev-list --reverse --no-merges "${base}..${head_sha}" "^${main_ref}") || exit 2
+if [ -z "${commits}" ]; then
+  echo "tdd-check: not applicable (every commit is already on main)"
+  exit 0
+fi
+
+changed=$(git diff-tree --stdin --no-commit-id --name-only -r <<<"${commits}") || exit 2
+code_changed=$(grep -E "${code_path}" <<<"${changed}" | grep -vE "${test_path}" | grep -vE '\.md$')
+if [ -z "${code_changed}" ]; then
+  echo "tdd-check: not applicable (no code under src/ bin/ deploy/ scripts/ docker/ changed; Markdown is not code)"
   exit 0
 fi
 

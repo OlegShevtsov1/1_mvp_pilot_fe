@@ -51,11 +51,94 @@ describe('scripts/tdd-check.sh', () => {
   it.each([
     ['README.md', 'changed\n'],
     ['.github/workflows/x.yml', 'name: x\n'],
+    ['scripts/README.md', '# notes\n'],
+    ['src/notes.md', '# notes\n'],
+    ['docs/runbook.md', '# runbook\n'],
   ])('does not apply when only %s changed', (path, content) => {
     commit(repo, 'docs: no code', { [path]: content })
     const result = tddCheck()
     expect(result.status, result.stdout + result.stderr).toBe(0)
     expect(result.stdout).toContain('not applicable')
+    expect(calls(bin, 'npm')).toEqual([])
+    expect(calls(bin, 'gh')).toEqual([])
+  })
+
+  it('still applies when code and Markdown change together', () => {
+    commit(repo, 'feat(x): code and notes', { 'src/app.ts': 'export const a = 2\n', 'README.md': 'changed\n' })
+    const result = tddCheck()
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('first commit must start with test(')
+  })
+
+  it('does not apply when the only commit not on main changes no code', () => {
+    git(repo, 'update-ref', 'refs/remotes/origin/develop', 'HEAD')
+    const hotfix = commit(repo, 'fix(x): hotfix', { 'src/app.ts': 'export const a = 2\n' })
+    git(repo, 'update-ref', 'refs/remotes/origin/main', hotfix)
+    commit(repo, 'docs: update readme', { 'README.md': 'changed\n' })
+    const result = tddCheck({ BASE_REF: 'develop', HEAD_REF: 'feature/PILOT-1-x' })
+    expect(result.status, result.stdout + result.stderr).toBe(0)
+    expect(result.stdout).toContain('not applicable (no code')
+    expect(calls(bin, 'npm')).toEqual([])
+    expect(calls(bin, 'gh')).toEqual([])
+  })
+
+  it('is not applicable to the release PR develop → main', () => {
+    commit(repo, 'PILOT-92: Dev Deploy guard (#20)', { 'src/app.ts': 'export const a = 2\n' })
+    const result = tddCheck({ HEAD_REF: 'develop' })
+    expect(result.status, result.stdout + result.stderr).toBe(0)
+    expect(result.stdout).toContain('not applicable (release PR develop → main)')
+    expect(calls(bin, 'npm')).toEqual([])
+    expect(calls(bin, 'gh')).toEqual([])
+  })
+
+  it('still requires test( first on a feature PR into main', () => {
+    commit(repo, 'PILOT-92: Dev Deploy guard (#20)', { 'src/app.ts': 'export const a = 2\n' })
+    const result = tddCheck({ HEAD_REF: 'feature/PILOT-1-x' })
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('first commit must start with test(')
+  })
+
+  it('still checks a PR from develop into a base other than main', () => {
+    git(repo, 'update-ref', 'refs/remotes/origin/develop', 'HEAD')
+    commit(repo, 'feat(x): code first', { 'src/app.ts': 'export const a = 2\n' })
+    const result = tddCheck({ HEAD_REF: 'develop', BASE_REF: 'develop' })
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('first commit must start with test(')
+  })
+
+  it('passes a back-merge whose commits are all on main', () => {
+    git(repo, 'update-ref', 'refs/remotes/origin/develop', 'HEAD')
+    const hotfix = commit(repo, 'fix(x): hotfix', { 'src/app.ts': 'export const a = 2\n' })
+    git(repo, 'update-ref', 'refs/remotes/origin/main', hotfix)
+    const result = tddCheck({ BASE_REF: 'develop', HEAD_REF: 'main' })
+    expect(result.status, result.stdout + result.stderr).toBe(0)
+    expect(result.stdout).toContain('every commit is already on main')
+    expect(calls(bin, 'npm')).toEqual([])
+    expect(calls(bin, 'gh')).toEqual([])
+  })
+
+  it('checks only the commits that are not on main yet', () => {
+    git(repo, 'update-ref', 'refs/remotes/origin/develop', 'HEAD')
+    const hotfix = commit(repo, 'fix(x): hotfix', { 'src/app.ts': 'export const a = 2\n' })
+    git(repo, 'update-ref', 'refs/remotes/origin/main', hotfix)
+    const red = commit(repo, 'test(x): failing test', { 'src/a.test.ts': 'red\n' })
+    commit(repo, 'feat(x): code', { 'src/app.ts': 'export const a = 3\n' })
+    const result = tddCheck({ BASE_REF: 'develop' })
+    expect(result.status, result.stdout + result.stderr).toBe(0)
+    expect(npmRanAt()).toEqual([red, red])
+    const gh = calls(bin, 'gh')
+    expect(gh).toHaveLength(1)
+    expect(gh[0]).toContain(`statuses/${red}`)
+  })
+
+  it('refuses to run when origin/main is missing', () => {
+    git(repo, 'update-ref', 'refs/remotes/origin/develop', 'HEAD')
+    commit(repo, 'test(x): failing test', { 'src/a.test.ts': 'red\n' })
+    commit(repo, 'feat(x): code', { 'src/app.ts': 'export const a = 2\n' })
+    git(repo, 'update-ref', '-d', 'refs/remotes/origin/main')
+    const result = tddCheck({ BASE_REF: 'develop' })
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('origin/main')
     expect(calls(bin, 'npm')).toEqual([])
     expect(calls(bin, 'gh')).toEqual([])
   })

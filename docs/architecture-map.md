@@ -120,7 +120,7 @@ Boundaries pending operator confirmation (C3 after-merge gate).
 - No environment values in the bundle: hosts, DSNs and the environment name come only from `/config.js`
   (`CLAUDE.md` Hard Rules; `scripts/check-bundle-config.sh src dist` in CI).
 - The specs under `docs/features/<slug>/` are read-only `sync-spec` copies of the backend's; none exist yet.
-- The TDD commit order is enforced on every pull request that changes code (`tdd-check`, `scripts/tdd-check.sh`).
+- The TDD commit order is enforced on every pull request that changes code (`tdd-check`, `scripts/tdd-check.sh`), except the release PR develop → main; commits already on main are skipped.
 - No design system, router or API client exists yet; the first feature that needs one introduces it in its own
   task and records it here.
 

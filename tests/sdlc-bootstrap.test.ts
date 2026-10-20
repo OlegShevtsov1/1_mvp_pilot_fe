@@ -164,6 +164,11 @@ describe('tdd-check workflow', () => {
   it('keeps expressions out of run scripts', () => {
     for (const run of runs(flow)) expect(run).not.toContain('${{')
   })
+
+  it('passes the head branch so the release PR is recognised', () => {
+    const step = steps.find((step) => step.run === 'bash scripts/tdd-check.sh')
+    expect(step?.env?.HEAD_REF).toContain('github.event.pull_request.head.ref')
+  })
 })
 
 describe('main-guard workflow', () => {

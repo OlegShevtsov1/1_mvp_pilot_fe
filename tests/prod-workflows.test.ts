@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { repoRoot } from './support.ts'
+import { checkoutWithZone, projectEnv, repoRoot, stepOutput } from './support.ts'
 
 interface Step {
   id?: string
@@ -18,6 +18,7 @@ interface Job {
   if?: string
   environment?: string
   permissions?: Record<string, string>
+  outputs?: Record<string, string>
   steps: Step[]
 }
 
@@ -159,6 +160,43 @@ describe('Kamal Deploy workflow', () => {
     expect(telegram?.if).toBe('always()')
     expect(telegram?.with?.topic).toBe('PILOT_PROD_ALERTS')
     for (const step of steps) expect(step.run ?? '').not.toMatch(/rollback/)
+  })
+
+  it('passes the mirror VPN client inputs to every real vpn-up step and none to the guard', () => {
+    const real = Object.entries(workflow.jobs)
+      .filter(([name]) => name !== 'vpn-up-check')
+      .flatMap(([name, job]) => job.steps.filter((step) => step.uses === vpnUp).map(() => name))
+    expect(real).toEqual(['deploy', 'release-watch'])
+
+    const zonesFrom = { deploy: '${{ steps.dns.outputs.zones }}', 'release-watch': '${{ needs.deploy.outputs.zones }}' }
+    for (const [name, zones] of Object.entries(zonesFrom)) {
+      const steps = workflow.jobs[name].steps
+      const up = indexOf(steps, (step) => step.uses === vpnUp)
+      expect(Object.keys(steps[up].with ?? {}), name).toEqual(['ovpn', 'ci-vpn-ip', 'dev-host', 'dns-zones'])
+      expect(steps[up].with, name).toEqual({
+        ovpn: '${{ secrets.VPN_CI_OVPN }}',
+        'ci-vpn-ip': '${{ secrets.CI_VPN_IP }}',
+        'dev-host': '${{ secrets.DEV_HOST }}',
+        'dns-zones': zones,
+      })
+    }
+
+    const deploy = workflow.jobs.deploy
+    const dns = indexOf(deploy.steps, (step) => step.id === 'dns')
+    expect(dns).toBeLessThan(indexOf(deploy.steps, (step) => step.uses === vpnUp))
+    expect(deploy.outputs).toEqual({ zones: '${{ steps.dns.outputs.zones }}' })
+    expect(needs(workflow.jobs['release-watch'])).toContain('deploy')
+    expect(workflow.jobs['release-watch'].steps.some((step) => step.id === 'dns')).toBe(false)
+
+    const run = deploy.steps[dns].run ?? ''
+    const zones = stepOutput(run)
+    expect(zones).toBe(`zones=mvp.up.km.ua,${projectEnv().PROJECT_ZONE}`)
+    expect(zones).toBe('zones=mvp.up.km.ua,pilot.up.km.ua')
+    expect(() => stepOutput(run, checkoutWithZone('not a zone'))).toThrow(/invalid PROJECT_ZONE/)
+
+    const guard = workflow.jobs['vpn-up-check'].steps.find((step) => step.uses === vpnUp)
+    expect(guard).toMatchObject({ if: false, with: { ovpn: 'unused' } })
+    expect(guard?.with).toEqual({ ovpn: 'unused' })
   })
 })
 

@@ -103,6 +103,29 @@ export function registryDigest(dir: string, tag: string): string | undefined {
   return existsSync(file) ? readFileSync(file, 'utf8').trim() : undefined
 }
 
+/** Runs a workflow step's `run` script from `cwd` (the repository root) and returns what it wrote to GITHUB_OUTPUT. */
+export function stepOutput(run: string, cwd = repoRoot): string {
+  const file = join(tempDir('step-output-'), 'output')
+  writeFileSync(file, '')
+  const result = spawnSync('bash', ['-c', run], {
+    cwd,
+    env: { ...process.env, GITHUB_OUTPUT: file },
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) throw new Error(`step failed: ${result.stderr}`)
+  return readFileSync(file, 'utf8').trim()
+}
+
+/** A checkout holding only `deploy/lib.sh` and a `config/project.env` with the given PROJECT_ZONE. */
+export function checkoutWithZone(zone: string): string {
+  const dir = tempDir('checkout-')
+  mkdirSync(join(dir, 'deploy'))
+  mkdirSync(join(dir, 'config'))
+  writeFileSync(join(dir, 'deploy', 'lib.sh'), readFileSync(join(repoRoot, 'deploy', 'lib.sh')))
+  writeFileSync(join(dir, 'config', 'project.env'), `PROJECT_NAME=${projectEnv().PROJECT_NAME}\nPROJECT_ZONE=${zone}\n`)
+  return dir
+}
+
 export function runScript(script: string, args: string[], env: Record<string, string>, cwd?: string) {
   return spawnSync('bash', [join(repoRoot, script), ...args], {
     cwd,

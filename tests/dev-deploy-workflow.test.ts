@@ -2,9 +2,10 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { projectEnv, repoRoot } from './support.ts'
+import { checkoutWithZone, projectEnv, repoRoot, stepOutput } from './support.ts'
 
 interface Step {
+  id?: string
   name?: string
   uses?: string
   run?: string
@@ -74,6 +75,33 @@ describe('Dev Deploy workflow', () => {
     expect(build).toBeLessThan(up)
     expect(up).toBeLessThan(deploy)
     expect(steps.at(-1)).toMatchObject({ uses: vpnDown, if: 'always()' })
+  })
+
+  it('passes the mirror VPN client inputs to the real vpn-up step and none to the guard', () => {
+    const real = Object.entries(workflow.jobs)
+      .filter(([name]) => name !== 'vpn-up-check')
+      .flatMap(([name, job]) => job.steps.filter((step) => step.uses === vpnUp).map(() => name))
+    expect(real).toEqual(['deploy'])
+
+    const steps = workflow.jobs.deploy.steps
+    const up = indexOf(steps, (step) => step.uses === vpnUp)
+    const dns = indexOf(steps, (step) => step.id === 'dns')
+    expect(dns).toBeLessThan(up)
+    expect(Object.keys(steps[up].with ?? {})).toEqual(['ovpn', 'ci-vpn-ip', 'dev-host', 'dns-zones'])
+    expect(steps[up].with).toEqual({
+      ovpn: '${{ secrets.VPN_CI_OVPN }}',
+      'ci-vpn-ip': '${{ secrets.CI_VPN_IP }}',
+      'dev-host': '${{ secrets.DEV_HOST }}',
+      'dns-zones': '${{ steps.dns.outputs.zones }}',
+    })
+    const zones = stepOutput(steps[dns].run ?? '')
+    expect(zones).toBe(`zones=mvp.up.km.ua,${projectEnv().PROJECT_ZONE}`)
+    expect(zones).toBe('zones=mvp.up.km.ua,pilot.up.km.ua')
+    expect(() => stepOutput(steps[dns].run ?? '', checkoutWithZone('not a zone'))).toThrow(/invalid PROJECT_ZONE/)
+
+    const guard = workflow.jobs['vpn-up-check'].steps.find((step) => step.uses === vpnUp)
+    expect(guard).toMatchObject({ if: false, with: { ovpn: 'unused' } })
+    expect(guard?.with).toEqual({ ovpn: 'unused' })
   })
 
   it('keeps expressions out of run scripts', () => {

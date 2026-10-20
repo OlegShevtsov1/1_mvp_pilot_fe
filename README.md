@@ -206,11 +206,13 @@ branch exists.
 
 `tdd-check` ([`scripts/tdd-check.sh`](scripts/tdd-check.sh)) applies to a
 pull request that changes non-test files under `src/`, `bin/`, `deploy/`,
-`scripts/` or `docker/`. Its first commit must be `test(...)`, and `npm test`
+`scripts/` or `docker/` (Markdown files do not count as code). Its first commit must be `test(...)`, and `npm test`
 must fail at that commit: the check reproduces this and records it there as
 the failing commit status `tdd-check/red`. A later `feat(...)` or `fix(...)`
 commit must follow. Tests (`tests/` and `*.test.*` files under those code
-directories) must not change between the two.
+directories) must not change between the two. It does not apply to the
+release PR `develop` → `main`, and commits already on `main` (a back-merge
+after a hotfix) are not checked again.
 
 `main-guard` ([`scripts/main-guard.sh`](scripts/main-guard.sh)) runs on every
 push to `main`, and its twin `develop-guard` on every push to `develop`. A

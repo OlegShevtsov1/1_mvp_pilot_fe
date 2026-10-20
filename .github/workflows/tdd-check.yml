@@ -2,7 +2,8 @@ name: tdd-check
 
 # The TDD commit order of a pull request that changes code (scripts/tdd-check.sh): test( first
 # and RED, then feat( or fix(, with the tests unchanged in between. RED is reproduced at the
-# test commit and recorded there as the failing commit status tdd-check/red.
+# test commit and recorded there as the failing commit status tdd-check/red. The release PR
+# develop → main and commits already on main are not applicable (scripts/tdd-check.sh).
 on:
   pull_request:
 
@@ -32,6 +33,7 @@ jobs:
       - name: Check the commit order and reproduce RED
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}

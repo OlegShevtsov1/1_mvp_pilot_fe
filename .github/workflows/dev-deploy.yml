@@ -150,11 +150,18 @@ jobs:
           KAMAL_VERSION: 2.12.0
         run: gem install kamal -v "$KAMAL_VERSION" --no-document
 
+      - name: VPN DNS zones (mvp and the zone in config/project.env)
+        id: dns
+        run: source deploy/lib.sh && load_project_env && echo "zones=mvp.up.km.ua,$PROJECT_ZONE" >> "$GITHUB_OUTPUT"
+
       # Taken after the build so the shared VPN lock is held only while deploying.
       - id: vpn
         uses: OlegShevtsov1/1_mvp_infra/.github/actions/vpn-up@env/dev
         with:
           ovpn: ${{ secrets.VPN_CI_OVPN }}
+          ci-vpn-ip: ${{ secrets.CI_VPN_IP }}
+          dev-host: ${{ secrets.DEV_HOST }}
+          dns-zones: ${{ steps.dns.outputs.zones }}
 
       - name: Load the deploy key
         env:

@@ -26,7 +26,7 @@ interface Workflow {
   jobs: Record<string, Job>
 }
 
-const notifyTelegram = 'OlegShevtsov1/1_mvp_infra/.github/actions/notify-telegram@env/dev'
+const notifyTelegram = './infra-helpers/.github/actions/notify-telegram'
 
 function load(file: string) {
   const text = readFileSync(join(repoRoot, '.github', 'workflows', file), 'utf8')

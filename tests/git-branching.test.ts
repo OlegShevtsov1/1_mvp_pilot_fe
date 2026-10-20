@@ -65,7 +65,7 @@ describe('develop-guard workflow', () => {
     expect(alert.if).toBe('failure()')
     expect(alert.environment).toBe('dev')
     const notify = alert.steps.find(
-      (step) => step.uses === 'OlegShevtsov1/1_mvp_infra/.github/actions/notify-telegram@env/dev',
+      (step) => step.uses === './infra-helpers/.github/actions/notify-telegram',
     )
     expect(notify?.with?.topic).toBe('PILOT_DEV_ALERTS')
     expect(Object.keys(notify?.env ?? {}).sort()).toEqual([
@@ -79,6 +79,16 @@ describe('develop-guard workflow', () => {
 
   it('keeps expressions out of run scripts', () => {
     for (const run of runs(flow)) expect(run).not.toContain(expressionOpener)
+  })
+
+  it('is skipped on the mirror, whose develop receives direct sync commits (decision 51)', () => {
+    expect(flow.jobs.guard.if).toBe("vars.MIRROR != 'true'")
+  })
+})
+
+describe('main-guard workflow', () => {
+  it('keeps guarding main on the mirror too, where main receives only PR merges (decision 51)', () => {
+    expect(workflow('main-guard.yml').jobs.guard.if).toBeUndefined()
   })
 })
 

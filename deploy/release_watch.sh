@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# release-watch: after a prod deploy, checks every RELEASE_WATCH_POLL_SECONDS (default 30) for
-# RELEASE_WATCH_SECONDS (default 600) that https://app.<zone>/health answers and that no GlitchTip
-# issue of <PROJECT_NAME>-fe-prod appeared that was not there at the start. Stops at the first
+# release-watch: after a prod deploy, checks that https://app.<zone>/health answers and that no
+# GlitchTip issue of <PROJECT_NAME>-fe-prod appeared that was not there at the start: once, then again
+# after each of ceil(RELEASE_WATCH_SECONDS / RELEASE_WATCH_POLL_SECONDS) sleeps of
+# RELEASE_WATCH_POLL_SECONDS (defaults 600 and 30: 21 checks). The count, not the clock, sets the
+# length of the watch, so it does not shorten when a check is slow. Stops at the first
 # problem: Kamal Manage waits for this job (one prod concurrency group), so an operator's rollback
 # is not held up. It never rolls back by itself.
 # Usage: deploy/release_watch.sh vX.Y.Z
@@ -27,7 +29,7 @@ finish() {
 }
 
 baseline=$("$issues_script") || finish "❌ release-watch $tag: could not read GlitchTip issues of $project"
-deadline=$((SECONDS + wait)) checks=0
+checks=0 polls=$(( (wait + poll - 1) / poll ))
 while :; do
   curl -fsS --max-time 10 -o /dev/null "$health_url" 2>/dev/null || finish "❌ release-watch $tag: $health_url failed"
   checks=$((checks + 1))
@@ -38,7 +40,7 @@ while :; do
     titles=$(jq -r '.[:3] | map(.title // "untitled" | gsub("[\r\n]+"; " ") | .[:80]) | join("; ")' <<<"$new")
     finish "❌ release-watch $tag: new GlitchTip issue(s) in $project: $titles"
   fi
-  [ "$SECONDS" -lt "$deadline" ] || break
+  [ "$checks" -le "$polls" ] || break
   sleep "$poll"
 done
 finish "✅ release-watch $tag: $checks health checks OK, no new GlitchTip issues in $project ($((wait / 60)) min)"

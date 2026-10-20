@@ -55,6 +55,19 @@ jobs:
     environment: prod
     timeout-minutes: 5
     steps:
+      - name: Check out the shared CI actions (1_mvp_infra@env/dev)
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/1_mvp_infra
+          ref: env/dev
+          path: infra-helpers
+          token: ${{ secrets.INFRA_READ_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions
+            scripts
+            host
+
       - name: Compose the message
         id: message
         env:
@@ -68,7 +81,7 @@ jobs:
             echo "text=❌ Release $TAG failed: $RUN_URL" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: OlegShevtsov1/1_mvp_infra/.github/actions/notify-telegram@env/dev
+      - uses: ./infra-helpers/.github/actions/notify-telegram
         with:
           topic: PILOT_PROD_ALERTS
           message: ${{ steps.message.outputs.text }}

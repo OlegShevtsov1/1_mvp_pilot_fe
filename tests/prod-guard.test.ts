@@ -50,6 +50,34 @@ describe('deploy/prod_guard.sh', () => {
     expect(result.stdout).toBe('')
   })
 
+  it('mirror deploy prints the tag and the primary source_sha, naming the mode', () => {
+    const result = deploy({ MIRROR: 'true', SOURCE_SHA: sha })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toBe(`tag=${tag}\nsource_sha=${sha}\n`)
+    expect(result.stderr).toContain('mode: mirror')
+  })
+
+  it.each(['', 'abc', `sha-${sha}`])('mirror deploy refuses the source_sha %j', (source) => {
+    const result = deploy({ MIRROR: 'true', SOURCE_SHA: source })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('source_sha')
+    expect(result.stdout).toBe('')
+  })
+
+  it('primary deploy refuses a source_sha', () => {
+    const result = deploy({ SOURCE_SHA: sha })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('only for a deploy from the mirror')
+    expect(result.stdout).toBe('')
+  })
+
+  it('primary deploy names its mode and prints only the tag', () => {
+    const result = deploy()
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toBe(`tag=${tag}\n`)
+    expect(result.stderr).toContain('mode: primary')
+  })
+
   it.each(['status', 'logs'])('manage %s needs no confirm', (action) => {
     const result = guard('manage', { ACTION: action })
     expect(result.status, result.stderr).toBe(0)

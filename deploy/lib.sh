@@ -64,6 +64,12 @@ require_commands() {
   [ ${#missing[@]} -eq 0 ] || die "missing required commands: ${missing[*]}"
 }
 
+# Reads a MIRROR_SOURCE.json (written by publish-mirror.sh) on stdin and prints one
+# "<tag><TAB><primary_sha>" line per entry of its tags list; fails when there is no such list.
+mirror_source_tags() {
+  jq -r '.tags | if type == "array" then .[] | [.tag, .primary_sha] | @tsv else error end' 2>/dev/null
+}
+
 # Hides a value from GitHub Actions logs; outside Actions nothing is printed at all.
 mask() {
   if [ "${GITHUB_ACTIONS:-}" = true ]; then

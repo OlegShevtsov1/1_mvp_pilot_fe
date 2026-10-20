@@ -24,6 +24,18 @@ Minimum backend version: v0.1.0
 
 ### Security
 
+## [0.2.0] - 2026-10-21
+
+Minimum backend version: v0.1.0
+
+### Added
+
+- Prod deploy from the public mirror (decision 43): Kamal Deploy takes `source_sha` when `vars.MIRROR`
+  is `true`, checks the (version, source_sha) pair against `MIRROR_SOURCE.json` and promotes the
+  primary's image `sha-<source_sha>`; develop-guard is skipped on the mirror.
+- The release-order check (`deploy/min-be-version`) reads the public backend mirror when running on
+  the mirror or without `BE_REPO_READ_TOKEN`.
+
 ## [0.1.0] - 2026-10-16
 
 Minimum backend version: v0.1.0

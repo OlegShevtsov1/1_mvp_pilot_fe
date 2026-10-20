@@ -26,7 +26,7 @@ for name in AWS_ROLE_ARN VPN_CI_OVPN SRV_DEPLOY_SSH_KEY SENTRY_DSN "$@"; do
   [ -n "${!name:-}" ] || missing+=("$name")
 done
 if [ ${#missing[@]} -gt 0 ]; then
-  echo "::error::Dev Deploy guard: missing ${missing[*]}. Repo secrets: AWS_ROLE_ARN, VPN_CI_OVPN, SRV_DEPLOY_SSH_KEY (I4a post-merge). Environment \"dev\" secrets: SENTRY_DSN, TELEGRAM_*_DEV_ALERTS_*."
+  echo "::error::Dev Deploy guard: missing ${missing[*]}. Repo secrets: AWS_ROLE_ARN, VPN_CI_OVPN, SRV_DEPLOY_SSH_KEY (I4a post-merge), INFRA_READ_TOKEN. Environment \"dev\" secrets: SENTRY_DSN, TELEGRAM_*_DEV_ALERTS_*."
   exit 1
 fi
 

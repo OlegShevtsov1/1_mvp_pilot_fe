@@ -103,13 +103,16 @@ export function registryDigest(dir: string, tag: string): string | undefined {
   return existsSync(file) ? readFileSync(file, 'utf8').trim() : undefined
 }
 
-/** Runs a workflow step's `run` script from `cwd` (the repository root) and returns what it wrote to GITHUB_OUTPUT. */
-export function stepOutput(run: string, cwd = repoRoot): string {
+/**
+ * Runs a workflow step's `run` script from `cwd` (the repository root) with `env` added to the environment and returns
+ * what it wrote to GITHUB_OUTPUT.
+ */
+export function stepOutput(run: string, cwd = repoRoot, env: Record<string, string> = {}): string {
   const file = join(tempDir('step-output-'), 'output')
   writeFileSync(file, '')
   const result = spawnSync('bash', ['-c', run], {
     cwd,
-    env: { ...process.env, GITHUB_OUTPUT: file },
+    env: { ...process.env, ...env, GITHUB_OUTPUT: file },
     encoding: 'utf8',
   })
   if (result.status !== 0) throw new Error(`step failed: ${result.stderr}`)
@@ -124,6 +127,21 @@ export function checkoutWithZone(zone: string): string {
   writeFileSync(join(dir, 'deploy', 'lib.sh'), readFileSync(join(repoRoot, 'deploy', 'lib.sh')))
   writeFileSync(join(dir, 'config', 'project.env'), `PROJECT_NAME=${projectEnv().PROJECT_NAME}\nPROJECT_ZONE=${zone}\n`)
   return dir
+}
+
+/**
+ * One entry of the `tags` list in MIRROR_SOURCE.json, the file publish-mirror.sh (1_mvp_sdlc) writes at the
+ * mirror's root. deploy/lib.sh `mirror_source_tags` reads only `tag` and `primary_sha`; keep both in step with
+ * the writer.
+ */
+export interface MirrorSourceTag {
+  tag: string
+  primary_sha: string
+  mirror_sha?: string
+}
+
+export function writeMirrorSource(path: string, tags: MirrorSourceTag[]): void {
+  writeFileSync(path, JSON.stringify({ tags }))
 }
 
 export function runScript(script: string, args: string[], env: Record<string, string>, cwd?: string) {

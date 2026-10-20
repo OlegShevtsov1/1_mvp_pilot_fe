@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { calls, fakeCommand, fakeCrane, projectEnv, registryDigest, runScript, seedImage, tempDir } from './support.ts'
+import { calls, fakeCommand, fakeCrane, projectEnv, registryDigest, runScript, seedImage, tempDir, writeMirrorSource } from './support.ts'
 
 const { PROJECT_NAME: name, PROJECT_ZONE: zone } = projectEnv()
 const sha = 'a'.repeat(40)
@@ -32,6 +32,7 @@ function run(script: string, args: string[], env: Record<string, string> = {}) {
     DEPLOY_POLL_SECONDS: '1',
     GH_REPO: 'owner/repo',
     BE_REPO: 'owner/be',
+    BE_REPO_TOKEN: 'SECRET-SENTINEL-BE',
     ...env,
   })
 }
@@ -335,6 +336,90 @@ esac`,
       expect(result.status, result.stderr).toBe(0)
       expect(result.stdout).toContain('prod-current is already')
       expect(crane('tag')).toHaveLength(tagged)
+    })
+
+    it('MIRROR unset → refuses a SOURCE_SHA before asking GitHub, ECR or Kamal', () => {
+      const result = run('deploy/deploy.sh', ['prod', tag], { SOURCE_SHA: 'b'.repeat(40) })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('only for a deploy from the mirror')
+      expect(calls(bin, 'gh')).toEqual([])
+      expect(calls(bin, 'crane')).toEqual([])
+      expect(calls(bin, 'kamal')).toEqual([])
+    })
+
+    describe('from the mirror (MIRROR=true)', () => {
+      const source = 'b'.repeat(40)
+      const mirrorSha = 'c'.repeat(40)
+      const sourceVersion = `prod-sha-${source}`
+      let mirrorSource: string
+
+      function mirrorRun(env: Record<string, string> = {}) {
+        return run('deploy/deploy.sh', ['prod', tag], {
+          MIRROR: 'true',
+          SOURCE_SHA: source,
+          MIRROR_SOURCE_FILE: mirrorSource,
+          BE_REPO_TOKEN: '',
+          ...env,
+        })
+      }
+
+      beforeEach(() => {
+        mirrorSource = join(bin, 'MIRROR_SOURCE.json')
+        writeMirrorSource(mirrorSource, [{ tag, primary_sha: source, mirror_sha: mirrorSha }])
+        writeMirrorSource(join(bin, 'be-mirror-source.json'), [{ tag: 'v0.1.0', primary_sha: beSha }])
+        seedImage(bin, `sha-${source}`, { layers: devLayers, service: `${name}-fe-dev` })
+        fakeGh({ tagSha: mirrorSha })
+        fakeCommand(
+          bin,
+          'curl',
+          `case "\${@: -1}" in
+  https://${zone}/health) echo '{"status":"ok","release":"${beSha}"}' ;;
+  https://raw.githubusercontent.com/OlegShevtsov1/1_mvp_pilot_be/main/MIRROR_SOURCE.json) cat "${bin}/be-mirror-source.json" ;;
+  */health) echo ok ;;
+  */config.js) cat "${configJs}" ;;
+  *) exit 22 ;;
+esac`,
+        )
+        servedConfig(sourceVersion, 'prod')
+      })
+
+      it('valid pair → promotes and deploys sha-<source_sha>, never the mirror commit', () => {
+        const result = mirrorRun()
+        expect(result.status, result.stderr).toBe(0)
+        expect(crane('mutate')).toEqual([
+          `mutate registry.invalid/${name}-front:sha-${source} --label service=${name}-fe -t registry.invalid/${name}-front:${sourceVersion}`,
+        ])
+        expect(calls(bin, 'kamal')).toEqual([`deploy -d prod --skip-push --version ${sourceVersion}`])
+        expect(calls(bin, 'crane').join('\n')).not.toContain(mirrorSha)
+        expect(registryDigest(bin, 'prod-current')).toBe(registryDigest(bin, sourceVersion))
+        expect(result.stdout).toContain(`backend on prod ${beSha.slice(0, 7)} is v0.1.0`)
+        expectNoLeaks(result)
+      })
+
+      it('wrong source_sha → refuses before crane and Kamal', () => {
+        const result = mirrorRun({ SOURCE_SHA: 'e'.repeat(40) })
+        expect(result.status).toBe(1)
+        expect(result.stderr).toContain('Nothing was deployed.')
+        expect(calls(bin, 'crane')).toEqual([])
+        expect(calls(bin, 'kamal')).toEqual([])
+      })
+
+      it('tag missing from MIRROR_SOURCE.json → refuses before crane and Kamal', () => {
+        writeMirrorSource(mirrorSource, [])
+        const result = mirrorRun()
+        expect(result.status).toBe(1)
+        expect(result.stderr).toContain(tag)
+        expect(calls(bin, 'crane')).toEqual([])
+        expect(calls(bin, 'kamal')).toEqual([])
+      })
+
+      it('missing SOURCE_SHA → refuses', () => {
+        const result = mirrorRun({ SOURCE_SHA: '' })
+        expect(result.status).toBe(1)
+        expect(result.stderr).toContain('source_sha')
+        expect(calls(bin, 'crane')).toEqual([])
+        expect(calls(bin, 'kamal')).toEqual([])
+      })
     })
   })
 

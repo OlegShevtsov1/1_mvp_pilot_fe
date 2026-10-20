@@ -28,8 +28,8 @@ interface Workflow {
 const workflowPath = join(repoRoot, '.github', 'workflows', 'dev-deploy.yml')
 const workflowText = readFileSync(workflowPath, 'utf8')
 const workflow = parse(workflowText) as Workflow
-const vpnUp = 'OlegShevtsov1/1_mvp_infra/.github/actions/vpn-up@env/dev'
-const vpnDown = 'OlegShevtsov1/1_mvp_infra/.github/actions/vpn-down@env/dev'
+const vpnUp = './infra-helpers/.github/actions/vpn-up'
+const vpnDown = './infra-helpers/.github/actions/vpn-down'
 
 function indexOf(steps: Step[], match: (step: Step) => boolean): number {
   const index = steps.findIndex(match)
@@ -61,9 +61,7 @@ describe('Dev Deploy workflow', () => {
     const preflight = workflow.jobs.preflight.steps
     expect(preflight[0].uses).toMatch(/^actions\/checkout@/)
     expect(preflight[1].run).toContain('deploy/preflight.sh dev')
-    expect(workflow.jobs['vpn-up-check'].steps.map((step) => step.uses)).toEqual(
-      expect.arrayContaining([vpnUp, vpnDown]),
-    )
+    expect(workflow.jobs['vpn-up-check'].steps.some((step) => step.with?.path === 'infra-helpers')).toBe(true)
     expect(workflow.jobs.deploy.needs).toEqual(expect.arrayContaining(['preflight', 'vpn-up-check']))
   })
 
@@ -99,9 +97,7 @@ describe('Dev Deploy workflow', () => {
     expect(zones).toBe('zones=mvp.up.km.ua,pilot.up.km.ua')
     expect(() => stepOutput(steps[dns].run ?? '', checkoutWithZone('not a zone'))).toThrow(/invalid PROJECT_ZONE/)
 
-    const guard = workflow.jobs['vpn-up-check'].steps.find((step) => step.uses === vpnUp)
-    expect(guard).toMatchObject({ if: false, with: { ovpn: 'unused' } })
-    expect(guard?.with).toEqual({ ovpn: 'unused' })
+    expect(workflow.jobs['vpn-up-check'].steps.some((step) => step.uses === vpnUp)).toBe(false)
   })
 
   it('keeps expressions out of run scripts', () => {

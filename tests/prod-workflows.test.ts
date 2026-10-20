@@ -14,11 +14,13 @@ interface Step {
 }
 
 interface Job {
+  name?: string
   needs?: string | string[]
   if?: string
   environment?: string
   permissions?: Record<string, string>
   outputs?: Record<string, string>
+  env?: Record<string, string>
   steps: Step[]
 }
 
@@ -29,9 +31,9 @@ interface Workflow {
   jobs: Record<string, Job>
 }
 
-const vpnUp = 'OlegShevtsov1/1_mvp_infra/.github/actions/vpn-up@env/dev'
-const vpnDown = 'OlegShevtsov1/1_mvp_infra/.github/actions/vpn-down@env/dev'
-const notifyTelegram = 'OlegShevtsov1/1_mvp_infra/.github/actions/notify-telegram@env/dev'
+const vpnUp = './infra-helpers/.github/actions/vpn-up'
+const vpnDown = './infra-helpers/.github/actions/vpn-down'
+const notifyTelegram = './infra-helpers/.github/actions/notify-telegram'
 
 function load(file: string) {
   const text = readFileSync(join(repoRoot, '.github', 'workflows', file), 'utf8')
@@ -65,9 +67,7 @@ function expectProdShape(text: string, workflow: Workflow, mainJob: string, guar
   expect(needs(preflight)).toContain('guard')
   expect(preflight.steps.some((step) => runs(step, 'deploy/prod_preflight.sh'))).toBe(true)
 
-  expect(workflow.jobs['vpn-up-check'].steps.map((step) => step.uses)).toEqual(
-    expect.arrayContaining([vpnUp, vpnDown]),
-  )
+  expect(workflow.jobs['vpn-up-check'].steps.some((step) => step.with?.path === 'infra-helpers')).toBe(true)
 
   const main = workflow.jobs[mainJob]
   expect(main.environment).toBe('prod')
@@ -92,11 +92,39 @@ function expectProdShape(text: string, workflow: Workflow, mainJob: string, guar
 describe('Kamal Deploy workflow', () => {
   const { text, workflow } = load('kamal-deploy.yml')
 
-  it('is dispatched with environment, version and confirm', () => {
+  it('is dispatched with environment, version, an optional source_sha and confirm', () => {
     const inputs = workflow.on.workflow_dispatch?.inputs ?? {}
-    expect(Object.keys(inputs)).toEqual(['environment', 'version', 'confirm'])
+    expect(Object.keys(inputs)).toEqual(['environment', 'version', 'source_sha', 'confirm'])
     expect(inputs.environment).toMatchObject({ type: 'choice', options: ['prod'] })
-    for (const input of Object.values(inputs)) expect(input.required).toBe(true)
+    for (const name of ['environment', 'version', 'confirm']) expect(inputs[name].required).toBe(true)
+    expect(inputs.source_sha).toMatchObject({ required: false, type: 'string' })
+  })
+
+  it('names the mode in the guard job', () => {
+    const name = workflow.jobs.guard.name ?? ''
+    expect(name).toContain('vars.MIRROR')
+    expect(name).toContain('mirror')
+    expect(name).toContain('primary')
+  })
+
+  it('in mirror mode matches the tag to the primary commit after the main check', () => {
+    const steps = workflow.jobs.guard.steps
+    const source = indexOf(steps, (step) => runs(step, 'deploy/mirror_source_check.sh'))
+    expect(source).toBeGreaterThan(indexOf(steps, (step) => runs(step, 'deploy/main_commit_check.sh')))
+    expect(steps[source]).toMatchObject({ id: 'source', if: "vars.MIRROR == 'true'" })
+    expect(Object.keys(steps[source].env ?? {})).toEqual(expect.arrayContaining(['TAG', 'SOURCE_SHA']))
+    const inputs = steps.find((step) => step.id === 'inputs')
+    expect(Object.keys(inputs?.env ?? {})).toEqual(expect.arrayContaining(['MIRROR', 'SOURCE_SHA']))
+  })
+
+  it('promotes sha-<source_sha> in mirror mode and the tag commit otherwise', () => {
+    const outputs = workflow.jobs.guard.outputs ?? {}
+    expect(outputs.version).toContain('steps.source.outputs.version')
+    expect(outputs.version).toContain('steps.tag.outputs.version')
+    expect(outputs.source_sha).toBeDefined()
+    expect(Object.keys(workflow.jobs.deploy.env ?? {})).toContain('SOURCE_SHA')
+    const step = workflow.jobs.deploy.steps.find((candidate) => runs(candidate, 'deploy/deploy.sh prod'))
+    expect(Object.keys(step?.env ?? {})).toContain('MIRROR')
   })
 
   it('guards first, never builds, and reaches prod only over the VPN', () => {
@@ -132,12 +160,14 @@ describe('Kamal Deploy workflow', () => {
     expect(Object.keys(step?.env ?? {})).toEqual(expect.arrayContaining(['GH_TOKEN', 'GH_REPO', 'BE_REPO_TOKEN']))
   })
 
-  it('names the release secrets in its preflight', () => {
+  it('names the release secrets in its preflight; the backend read token is optional', () => {
     const step = workflow.jobs.preflight.steps.find((candidate) => runs(candidate, 'deploy/prod_preflight.sh'))
-    for (const name of ['BE_REPO_READ_TOKEN', 'GLITCHTIP_API_URL', 'GLITCHTIP_API_TOKEN']) {
+    for (const name of ['GLITCHTIP_API_URL', 'GLITCHTIP_API_TOKEN']) {
       expect(step?.run).toContain(name)
       expect(Object.keys(step?.env ?? {})).toContain(name)
     }
+    expect(step?.run).not.toContain('BE_REPO_READ_TOKEN')
+    expect(Object.keys(step?.env ?? {})).not.toContain('BE_REPO_READ_TOKEN')
   })
 
   it('watches prod for 10 minutes after a successful deploy and reports to the prod alerts topic', () => {
@@ -194,9 +224,7 @@ describe('Kamal Deploy workflow', () => {
     expect(zones).toBe('zones=mvp.up.km.ua,pilot.up.km.ua')
     expect(() => stepOutput(run, checkoutWithZone('not a zone'))).toThrow(/invalid PROJECT_ZONE/)
 
-    const guard = workflow.jobs['vpn-up-check'].steps.find((step) => step.uses === vpnUp)
-    expect(guard).toMatchObject({ if: false, with: { ovpn: 'unused' } })
-    expect(guard?.with).toEqual({ ovpn: 'unused' })
+    expect(workflow.jobs['vpn-up-check'].steps.some((step) => step.uses === vpnUp)).toBe(false)
   })
 })
 

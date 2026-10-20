@@ -120,6 +120,17 @@ internal IP addresses, internal hostnames, cloud account and DNS zone IDs, and
 task-tracker or chat IDs. Keep such values in secrets or private configuration,
 never in committed files.
 
+Workflows that connect the shared CI VPN or alert Telegram (Dev Deploy, Kamal
+Deploy, Kamal Manage, Release, develop-guard, main-guard) check out the
+`.github/actions`, `scripts` and `host` folders of `<owner>/1_mvp_infra` at
+`env/dev` into `infra-helpers/` and use `vpn-up`, `vpn-down` and
+`notify-telegram` from there. The owner is the repository owner, so the primary
+repository and its public mirror run the same files, each with its own
+`1_mvp_infra`. This needs the repository secret `INFRA_READ_TOKEN`, a
+fine-grained token with Contents: read on that repository only; the guard job of
+Dev Deploy, Kamal Deploy and Kamal Manage fails first, naming the secret, when
+it is missing or cannot read the repository.
+
 Dependabot ([`.github/dependabot.yml`](.github/dependabot.yml)) opens grouped
 weekly updates for npm (minor and patch) and GitHub Actions.
 
@@ -297,11 +308,12 @@ The guard steps fail fast, naming what is missing, when:
 
 - the ref is not `main`, `develop` or a `hotfix/*` branch;
 - a required secret is missing. Repository secrets: `AWS_ROLE_ARN`,
-  `VPN_CI_OVPN`, `SRV_DEPLOY_SSH_KEY`. Environment `dev` secrets: `SENTRY_DSN`,
-  `TELEGRAM_PILOT_DEV_ALERTS_BOT_TOKEN`, `TELEGRAM_PILOT_DEV_ALERTS_CHAT_ID`,
-  `TELEGRAM_PILOT_DEV_ALERTS_THREAD_ID`;
-- the `vpn-up` and `vpn-down` actions from `OlegShevtsov1/1_mvp_infra@env/dev`
-  cannot be used (missing, or that repository does not share its actions).
+  `VPN_CI_OVPN`, `SRV_DEPLOY_SSH_KEY`, `INFRA_READ_TOKEN`. Environment `dev`
+  secrets: `SENTRY_DSN`, `TELEGRAM_PILOT_DEV_ALERTS_BOT_TOKEN`,
+  `TELEGRAM_PILOT_DEV_ALERTS_CHAT_ID`, `TELEGRAM_PILOT_DEV_ALERTS_THREAD_ID`;
+- `INFRA_READ_TOKEN` is missing, `1_mvp_infra@env/dev` cannot be checked out
+  with it, or the checkout lacks `vpn-up`, `vpn-down` or `notify-telegram` (see
+  CI).
 
 The deploy job then:
 
@@ -386,19 +398,22 @@ Each run checks, in this order, and stops at the first failure:
 1. Guard, without the `prod` environment: the ref is `main`, the inputs and
    confirmation are valid, and (Kamal Deploy) the version is an annotated
    release tag ([`deploy/tag_check.sh`](deploy/tag_check.sh)) whose commit is on
-   `main`.
+   `main`; on the mirror also that `MIRROR_SOURCE.json` pairs it with
+   `source_sha` (see [Prod from the mirror](#prod-from-the-mirror-decision-43)).
 2. Preflight, in the `prod` environment: every required secret is set. Only
-   names are printed. Repository secrets: `AWS_ROLE_ARN`, `VPN_CI_OVPN`.
+   names are printed. Repository secrets: `AWS_ROLE_ARN`, `VPN_CI_OVPN`,
+   `INFRA_READ_TOKEN`.
    Environment `prod` secrets: `PROD_SSH_KEY`, `PROD_VPN_IP`, `SENTRY_DSN` (the
    prod frontend DSN), `TELEGRAM_PILOT_PROD_ALERTS_BOT_TOKEN`,
    `TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID`, `TELEGRAM_PILOT_PROD_ALERTS_THREAD_ID`;
-   Kamal Deploy also needs `BE_REPO_READ_TOKEN` (fine-grained token, Contents:
-   read on the backend repository, for the release-order check),
-   `GLITCHTIP_API_URL` (secret because the GlitchTip host is reachable only over
+   Kamal Deploy also needs `GLITCHTIP_API_URL` (secret because the GlitchTip host is reachable only over
    the VPN) and `GLITCHTIP_API_TOKEN` (read access to the prod frontend
-   project), both for release-watch.
-3. The `vpn-up` and `vpn-down` actions from `OlegShevtsov1/1_mvp_infra@env/dev`
-   can be used.
+   project), both for release-watch. `BE_REPO_READ_TOKEN` (fine-grained token,
+   Contents: read on the backend repository) is optional and used only on the
+   primary by the release-order check; without it the check reads the public
+   backend mirror.
+3. `INFRA_READ_TOKEN` is set, `1_mvp_infra@env/dev` can be checked out with
+   it, and the checkout has `vpn-up`, `vpn-down` and `notify-telegram` (see CI).
 
 Kamal Deploy then promotes the image before connecting the VPN, so a missing
 or altered image fails without taking the shared VPN lock. Next it connects
@@ -421,6 +436,7 @@ read -rs SENTRY_DSN && export SENTRY_DSN          # the prod front-end DSN
 
 deploy/promote.sh sha-<full git sha>             # only promote (deploy.sh prod does it too)
 deploy/deploy.sh prod v<X.Y.Z>                   # check tag and backend, promote, deploy, wait, move prod-current
+MIRROR=true SOURCE_SHA=<primary sha> deploy/deploy.sh prod v<X.Y.Z>   # the same from a mirror clone
 deploy/rollback.sh prod prod-previous            # back to the previous release (type ROLLBACK-prod)
 deploy/rollback.sh prod <full git sha>           # back to an earlier prod deploy (type ROLLBACK-prod)
 deploy/manage.sh status|logs|restart|remove      # remove: this app only
@@ -495,10 +511,37 @@ it.
    line ([`bin/sdlc-metrics`](bin/sdlc-metrics)) and reports ✅/❌ to the prod
    alerts topic. No LLM writes anything. The operator reviews the draft and
    publishes it.
-5. Deploy the tag to prod with Kamal Deploy (`version=vX.Y.Z`).
+5. Deploy the tag to prod with Kamal Deploy (`version=vX.Y.Z`); from v0.2.0 on
+   the mirror, see below.
 
 Seven days after a release, `bin/sdlc-metrics --escaped vX.Y.Z` prints the
 escaped-defects line (new GlitchTip issues of the prod frontend in that week).
+
+### Prod from the mirror (decision 43)
+
+From v0.2.0 prod is deployed only from the public mirror. The primary builds
+and tags (build once); the mirror builds nothing and promotes the primary's
+image. The repository variable `MIRROR=true` switches the mode; it also skips
+develop-guard on the mirror, whose `develop` receives direct sync commits. On
+the primary, `source_sha` is refused.
+
+1. Release on the primary as in [Cutting a release](#cutting-a-release).
+2. `publish-mirror.sh` (in `1_mvp_sdlc`) syncs the primary `main` to the
+   mirror through `develop` → PR → `main`, puts the same tag on the mirror
+   `main` and records `{tag, primary_sha, mirror_sha}` in `MIRROR_SOURCE.json`.
+3. On the mirror:
+
+   ```bash
+   gh workflow run "Kamal Deploy" --ref main -f environment=prod -f version=vX.Y.Z \
+     -f source_sha=<primary commit of the tag> -f confirm=prod
+   ```
+
+   The guard refuses unless the tag is annotated and on the mirror `main` and
+   `MIRROR_SOURCE.json` records exactly that pair
+   ([`deploy/mirror_source_check.sh`](deploy/mirror_source_check.sh)); then it
+   promotes `sha-<source_sha>`, built by the primary's Dev Deploy.
+4. release-watch runs on the mirror and reports ✅/❌; roll back with Kamal
+   Manage on the mirror (`prod-previous` or a sha), as below.
 
 ### Release order: backend first
 
@@ -507,7 +550,11 @@ A frontend release names the oldest backend it works with in
 prod backend reports on `/health` and asks GitHub whether it contains that
 backend tag ([`deploy/be_version_check.sh`](deploy/be_version_check.sh)). If
 not, it refuses with an explanation and deploys nothing: deploy that backend
-release to prod first.
+release to prod first. On the mirror, or without `BE_REPO_READ_TOKEN`, it asks
+no token-protected API: it maps the prod backend's release sha to its tag through
+the public backend mirror's `MIRROR_SOURCE.json` and requires that tag to be at
+least `deploy/min-be-version`. A file a few minutes stale after a backend
+publish means a refusal; retry later.
 
 ### release-watch
 

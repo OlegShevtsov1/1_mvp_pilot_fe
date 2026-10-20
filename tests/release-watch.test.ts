@@ -69,11 +69,15 @@ beforeEach(() => {
 
 describe('deploy/release_watch.sh', () => {
   it('reports a clean watch when prod stays healthy and no new issue appears', () => {
+    // An instant, recording sleep: the number of checks must not depend on how fast the machine is.
+    fakeCommand(bin, 'sleep')
     const result = run('deploy/release_watch.sh', ['v0.1.0'])
     expect(result.status, result.stderr).toBe(0)
     expect(result.stdout).toMatch(/✅ release-watch v0\.1\.0: \d+ health checks OK, no new GlitchTip issues in pilot-fe-prod/)
+    expect(result.stdout).toContain('✅ release-watch v0.1.0: 3 health checks OK')
     expect(outputText()).toMatch(/^text=✅ release-watch v0\.1\.0: /)
-    expect(calls(bin, 'curl').filter((call) => call.endsWith(`https://app.${zone}/health`)).length).toBeGreaterThanOrEqual(2)
+    expect(calls(bin, 'curl').filter((call) => call.endsWith(`https://app.${zone}/health`)).length).toBe(3)
+    expect(calls(bin, 'sleep')).toEqual(['1', '1'])
     expectNoSecrets(result)
   })
 

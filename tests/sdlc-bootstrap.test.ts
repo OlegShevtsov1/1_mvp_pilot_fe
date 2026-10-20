@@ -191,7 +191,7 @@ describe('main-guard workflow', () => {
     expect(alert.if).toBe('failure()')
     expect(alert.environment).toBe('dev')
     const notify = alert.steps.find(
-      (step) => step.uses === 'OlegShevtsov1/1_mvp_infra/.github/actions/notify-telegram@env/dev',
+      (step) => step.uses === './infra-helpers/.github/actions/notify-telegram',
     )
     expect(notify?.with?.topic).toBe('PILOT_DEV_ALERTS')
     expect(Object.keys(notify?.env ?? {}).sort()).toEqual([

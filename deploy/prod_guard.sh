@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Dual control for the prod workflows, checked before any job can read the prod secrets.
 # Usage: deploy/prod_guard.sh deploy|manage
-# Env: REF (github.ref), CONFIRM, and ENVIRONMENT + VERSION (deploy) or ACTION + VERSION (manage).
+# Env: REF (github.ref), CONFIRM, and ENVIRONMENT + VERSION + MIRROR + SOURCE_SHA (deploy) or
+# ACTION + VERSION (manage). MIRROR=true is the mirror mode (decision 43), which needs SOURCE_SHA,
+# the 40-hex primary commit of the tag; the primary refuses one.
 # Prints, ready for GITHUB_OUTPUT: deploy: tag=vX.Y.Z (prod deploys only a release tag; the Kamal
-# Deploy guard resolves it with deploy/tag_check.sh); manage: version=sha-<40 hex> and sha=<40 hex>,
-# or version=prod-previous and an empty sha, or both empty for a run without a version.
+# Deploy guard resolves it with deploy/tag_check.sh), plus source_sha=<40 hex> in mirror mode;
+# manage: version=sha-<40 hex> and sha=<40 hex>, or version=prod-previous and an empty sha, or
+# both empty for a run without a version.
 set -euo pipefail
 
 fail() {
@@ -27,7 +30,17 @@ case $mode in
       fail 'prod deploys only a release tag vX.Y.Z (got a commit sha): tag the commit on main first'
     fi
     [[ ${VERSION:-} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'version must be a release tag vX.Y.Z'
-    echo "tag=$VERSION"
+    if [ "${MIRROR:-}" = true ]; then
+      [[ ${SOURCE_SHA:-} =~ ^[0-9a-f]{40}$ ]] ||
+        fail 'mirror mode (vars.MIRROR=true) needs source_sha, the 40-hex primary commit of the release tag'
+      echo 'Kamal Deploy mode: mirror' >&2
+      echo "tag=$VERSION"
+      echo "source_sha=$SOURCE_SHA"
+    else
+      [ -z "${SOURCE_SHA:-}" ] || fail 'source_sha is only for a deploy from the mirror (vars.MIRROR=true)'
+      echo 'Kamal Deploy mode: primary' >&2
+      echo "tag=$VERSION"
+    fi
     ;;
   manage)
     case ${ACTION:-} in

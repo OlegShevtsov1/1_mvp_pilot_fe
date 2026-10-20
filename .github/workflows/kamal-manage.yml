@@ -75,28 +75,64 @@ jobs:
           TELEGRAM_PILOT_PROD_ALERTS_BOT_TOKEN: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_BOT_TOKEN }}
           TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID }}
           TELEGRAM_PILOT_PROD_ALERTS_THREAD_ID: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_THREAD_ID }}
+          INFRA_READ_TOKEN: ${{ secrets.INFRA_READ_TOKEN }}
         run: >-
           bash deploy/prod_preflight.sh
           TELEGRAM_PILOT_PROD_ALERTS_BOT_TOKEN
           TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID
           TELEGRAM_PILOT_PROD_ALERTS_THREAD_ID
+          INFRA_READ_TOKEN
 
-  # The runner downloads every action a job references while setting the job up, even for
-  # steps that never run, so this job fails before the deploy when vpn-up/vpn-down are missing
-  # on 1_mvp_infra@env/dev or that repository does not share its actions with this one.
+  # Fails before the deploy when the shared CI actions cannot be checked out with INFRA_READ_TOKEN.
   vpn-up-check:
-    name: 'Guard: vpn-up action available (1_mvp_infra@env/dev)'
+    name: 'Guard: shared CI actions available (1_mvp_infra@env/dev)'
     needs: preflight
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 2
     steps:
-      - if: false
-        uses: OlegShevtsov1/1_mvp_infra/.github/actions/vpn-up@env/dev
+      - name: 'Guard: INFRA_READ_TOKEN present'
+        env:
+          INFRA_READ_TOKEN: ${{ secrets.INFRA_READ_TOKEN }}
+        run: |
+          if [ -z "$INFRA_READ_TOKEN" ]; then
+            echo "::error::INFRA_READ_TOKEN is not set: add the repository secret INFRA_READ_TOKEN (fine-grained token, Contents: read on the owner's 1_mvp_infra)"
+            exit 1
+          fi
+          echo "INFRA_READ_TOKEN is set"
+
+      - name: Check out the shared CI actions (1_mvp_infra@env/dev)
+        id: infra
+        uses: actions/checkout@v7
         with:
-          ovpn: unused
-      - if: false
-        uses: OlegShevtsov1/1_mvp_infra/.github/actions/vpn-down@env/dev
-      - run: echo "vpn-up/vpn-down resolve at OlegShevtsov1/1_mvp_infra@env/dev"
+          repository: ${{ github.repository_owner }}/1_mvp_infra
+          ref: env/dev
+          path: infra-helpers
+          token: ${{ secrets.INFRA_READ_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions
+            scripts
+            host
+
+      - name: 'Guard: 1_mvp_infra@env/dev checked out'
+        if: failure() && steps.infra.outcome == 'failure'
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          echo "::error::cannot check out $OWNER/1_mvp_infra@env/dev with INFRA_READ_TOKEN: the token must grant Contents: read on that repository"
+          exit 1
+
+      - name: 'Guard: vpn-up, vpn-down and notify-telegram present'
+        run: |
+          missing=""
+          for name in vpn-up vpn-down notify-telegram; do
+            [ -f "infra-helpers/.github/actions/$name/action.yml" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing in 1_mvp_infra@env/dev (checked out with INFRA_READ_TOKEN):$missing"
+            exit 1
+          fi
+          echo "vpn-up, vpn-down and notify-telegram are present in 1_mvp_infra@env/dev"
 
   manage:
     name: Manage prod
@@ -109,6 +145,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check out the shared CI actions (1_mvp_infra@env/dev)
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/1_mvp_infra
+          ref: env/dev
+          path: infra-helpers
+          token: ${{ secrets.INFRA_READ_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions
+            scripts
+            host
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -149,7 +198,7 @@ jobs:
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
-      - uses: OlegShevtsov1/1_mvp_infra/.github/actions/vpn-up@env/dev
+      - uses: ./infra-helpers/.github/actions/vpn-up
         with:
           ovpn: ${{ secrets.VPN_CI_OVPN }}
 
@@ -185,7 +234,7 @@ jobs:
           fi
 
       - if: always()
-        uses: OlegShevtsov1/1_mvp_infra/.github/actions/vpn-down@env/dev
+        uses: ./infra-helpers/.github/actions/vpn-down
 
   notify:
     name: Notify Telegram
@@ -195,6 +244,19 @@ jobs:
     environment: prod
     timeout-minutes: 5
     steps:
+      - name: Check out the shared CI actions (1_mvp_infra@env/dev)
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/1_mvp_infra
+          ref: env/dev
+          path: infra-helpers
+          token: ${{ secrets.INFRA_READ_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions
+            scripts
+            host
+
       - name: Compose the message
         id: message
         env:
@@ -214,13 +276,13 @@ jobs:
           elif [ "$PREFLIGHT" != success ]; then
             stage="guard (secrets)"
           elif [ "$VPN_CHECK" != success ]; then
-            stage="guard (vpn-up availability)"
+            stage="guard (shared CI actions)"
           else
             stage="$ACTION"
           fi
           echo "text=❌ Kamal Manage prod $ACTION failed at $stage: $RUN_URL" >> "$GITHUB_OUTPUT"
 
-      - uses: OlegShevtsov1/1_mvp_infra/.github/actions/notify-telegram@env/dev
+      - uses: ./infra-helpers/.github/actions/notify-telegram
         with:
           topic: PILOT_PROD_ALERTS
           message: ${{ steps.message.outputs.text }}

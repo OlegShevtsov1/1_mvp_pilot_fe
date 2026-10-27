@@ -120,10 +120,12 @@ describe('ai-review workflow', () => {
     const reviews = steps.filter((step) => step.uses === action)
     expect(reviews).toHaveLength(1)
     const review = reviews[0]
-    expect(review.with?.anthropic_api_key).toBe('${{ secrets.ANTHROPIC_API_KEY }}')
+    expect(review.with?.claude_code_oauth_token).toBe('${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}')
+    expect(review.with).not.toHaveProperty('anthropic_api_key')
     expect(review.with?.github_token).toBe('${{ github.token }}')
 
     const args = String(review.with?.claude_args ?? '')
+    expect(args).toMatch(/^\s*--model claude-sonnet-5-5\s*$/m)
     expect(args).toContain('--max-turns 20')
     expect(args).toContain('--json-schema')
     const disallowed = option(args, '--disallowedTools').split(',')
@@ -154,7 +156,19 @@ describe('ai-review workflow', () => {
     for (const step of steps) expect(step.run ?? '').not.toContain('${{')
     const secrets = text.match(/secrets\.[A-Z_]+/g) ?? []
     expect(secrets.length).toBeGreaterThan(0)
-    for (const secret of secrets) expect(secret).toBe('secrets.ANTHROPIC_API_KEY')
+    for (const secret of secrets) expect(secret).toBe('secrets.CLAUDE_CODE_OAUTH_TOKEN')
+    expect(text).not.toContain('ANTHROPIC_API_KEY')
     expect(text).not.toMatch(/sk-ant-|ghp_|github_pat_|xox[bp]-/)
+  })
+
+  it('documents CLAUDE_CODE_OAUTH_TOKEN as the review secret in the README', () => {
+    const readme = readFileSync(join(repoRoot, 'README.md'), 'utf8')
+    const start = readme.indexOf('## AI PR review\n')
+    expect(start).toBeGreaterThanOrEqual(0)
+    const end = readme.indexOf('\n## ', start + 1)
+    const section = readme.slice(start, end === -1 ? undefined : end)
+    expect(section).toMatch(/Secrets \(names only\): `CLAUDE_CODE_OAUTH_TOKEN`/)
+    expect(section).toContain('claude_code_oauth_token')
+    expect(section).toContain('Sonnet 5.5')
   })
 })

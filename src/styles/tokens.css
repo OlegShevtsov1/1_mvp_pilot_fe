@@ -1,0 +1,77 @@
+:root {
+  color-scheme: light dark;
+
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-text: #16181d;
+  --color-text-muted: #555b66;
+  --color-accent: #4f46e5;
+  --color-accent-strong: #4338ca;
+  --color-accent-soft: #eef0ff;
+  --color-on-accent: #ffffff;
+  --color-border: #d9dce3;
+  --color-error: #b42318;
+  --color-focus: #4f46e5;
+  --color-status-progress: #b45309;
+  --color-status-done: #15803d;
+  --gradient-glow: radial-gradient(60rem 30rem at 50% -10%, rgb(79 70 229 / 14%), transparent 70%);
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2.5rem;
+  --space-6: 4rem;
+
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-family-display: 'Space Grotesk Variable', var(--font-family-base);
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 2rem;
+  --font-size-2xl: clamp(2.25rem, 1.5rem + 3vw, 3.5rem);
+  --font-size-3xl: clamp(2.5rem, 1.5rem + 4.5vw, 4.5rem);
+  --font-weight-bold: 700;
+  --line-height-base: 1.5;
+  --line-height-tight: 1.15;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999px;
+  --border-width: 1px;
+  --content-width: 40rem;
+
+  --shadow-sm: 0 1px 2px rgb(31 35 40 / 8%);
+  --shadow-md: 0 4px 12px rgb(31 35 40 / 10%);
+  --shadow-lg: 0 12px 32px rgb(31 35 40 / 14%);
+  --shadow-glow: 0 0 0 1px rgb(79 70 229 / 20%), 0 8px 32px rgb(79 70 229 / 18%);
+
+  --duration-base: 200ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #08090c;
+    --color-surface: #12141a;
+    --color-text: #eef0f4;
+    --color-text-muted: #9ba1ad;
+    --color-accent: #8b8dff;
+    --color-accent-strong: #a9abff;
+    --color-accent-soft: #1c1d3a;
+    --color-on-accent: #0b0b1a;
+    --color-border: #262a33;
+    --color-error: #ff8a80;
+    --color-focus: #a9abff;
+    --color-status-progress: #f5b544;
+    --color-status-done: #4cc38a;
+    --gradient-glow: radial-gradient(60rem 30rem at 50% -10%, rgb(139 141 255 / 22%), transparent 70%);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
+    --shadow-md: 0 4px 12px rgb(0 0 0 / 40%);
+    --shadow-lg: 0 12px 32px rgb(0 0 0 / 50%);
+    --shadow-glow: 0 0 0 1px rgb(139 141 255 / 25%), 0 8px 40px rgb(139 141 255 / 22%);
+  }
+}

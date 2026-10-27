@@ -18,9 +18,11 @@ for name in API_URL ENV_NAME; do
 done
 
 SENTRY_DSN=${SENTRY_DSN:-}
+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID:-}
 APP_VERSION=${KAMAL_VERSION:-local}
 
-for name in API_URL SENTRY_DSN ENV_NAME APP_VERSION; do
+for name in API_URL SENTRY_DSN GOOGLE_CLIENT_ID OAUTH_CLIENT_ID ENV_NAME APP_VERSION; do
   eval "value=\$$name"
   case $value in
     *[!A-Za-z0-9._~:/?#@\&=%+-]*) fail "$name has invalid characters" ;;
@@ -32,6 +34,8 @@ cat > "$tmp" <<JS
 window.APP_CONFIG = {
   API_URL: "$API_URL",
   SENTRY_DSN: "$SENTRY_DSN",
+  GOOGLE_CLIENT_ID: "$GOOGLE_CLIENT_ID",
+  OAUTH_CLIENT_ID: "$OAUTH_CLIENT_ID",
   ENV_NAME: "$ENV_NAME",
   APP_VERSION: "$APP_VERSION",
 };

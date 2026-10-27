@@ -226,6 +226,8 @@ jobs:
           PROD_VPN_IP: ${{ secrets.PROD_VPN_IP }}
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          OAUTH_CLIENT_ID: ${{ vars.OAUTH_CLIENT_ID }}
         run: |
           if [ "$ACTION" = rollback ]; then
             bash deploy/rollback.sh prod "${SHA:-$VERSION}"

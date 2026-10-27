@@ -118,6 +118,12 @@ describe('pr-conventions-check workflow', () => {
     ])
   })
 
+  it("reads CHANGELOG.md of the pull request's merge result", () => {
+    const checkout = Object.values(flow.jobs)[0].steps.find((step) => step.uses?.startsWith('actions/checkout@'))
+    expect(checkout).toBeDefined()
+    expect(checkout?.with?.ref).toBeUndefined()
+  })
+
   it('keeps expressions out of run scripts', () => {
     for (const run of runs(flow)) expect(run).not.toContain(expressionOpener)
   })

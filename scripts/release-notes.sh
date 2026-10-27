@@ -18,10 +18,7 @@ esac
 file=${CHANGELOG_FILE:-CHANGELOG.md}
 [ -f "$file" ] || { echo "release-notes: $file not found" >&2; exit 1; }
 
-notes=$(awk -v heading="$heading" '
-  index($0, "## ") == 1 { if (inside) exit; inside = ($0 == heading || index($0, heading " ") == 1); next }
-  inside { print }
-' "$file")
+notes=$("$(dirname "${BASH_SOURCE[0]}")/markdown-section.sh" "$heading" <"$file")
 # $(...) already dropped the trailing blank lines.
 notes=$(sed '/./,$!d' <<<"$notes")
 [ -n "$notes" ] || { echo "release-notes: no section ${heading#'## '} in $file (or it is empty)" >&2; exit 1; }

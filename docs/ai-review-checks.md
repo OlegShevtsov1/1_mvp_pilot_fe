@@ -23,14 +23,14 @@ curl -s -o /dev/null -w '%{http_code}\n' https://app.dev.pilot.up.km.ua/health
 `files-present`; `Front CI success`, `develop-guard success` and `Dev Deploy success` (application unchanged);
 `0` (variable not set, so off); health `200` within 600 s.
 
-**A1 🔒 — add the review secret (value never printed).**
+**A1 — the review secret is present (value never printed).**
 ```bash
-gh secret set ANTHROPIC_API_KEY -R OlegShevtsov1/1_mvp_pilot_fe   # paste the key at the prompt; never as an argument
-gh secret list -R OlegShevtsov1/1_mvp_pilot_fe | cut -f1 | grep -x ANTHROPIC_API_KEY
+gh secret list -R OlegShevtsov1/1_mvp_pilot_fe | cut -f1 | grep -x CLAUDE_CODE_OAUTH_TOKEN
 ```
-**Expected:** `✓ Set Actions secret ANTHROPIC_API_KEY`, and the list prints the name. To use a subscription token
-instead, set `CLAUDE_CODE_OAUTH_TOKEN` the same way. That also needs a reviewed PR switching the input to
-`claude_code_oauth_token` (README "AI PR review"). Until that PR is merged, STOP here.
+**Expected:** the list prints `CLAUDE_CODE_OAUTH_TOKEN` (set by the operator, decision 33 a). If not, set it 🔒 with
+`gh secret set CLAUDE_CODE_OAUTH_TOKEN -R OlegShevtsov1/1_mvp_pilot_fe` (paste the token at the prompt; never as an
+argument). Using `ANTHROPIC_API_KEY` instead needs a reviewed PR switching the input back to `anthropic_api_key`
+(README "AI PR review").
 
 **A2 🔒 — switch AI review on.**
 ```bash
@@ -99,7 +99,7 @@ git ls-remote --heads origin feature/PILOT-0-ai-review-probe archon/task-factory
 **Expected:** `AI review` → `pass`. Steps: `AI_REVIEW switch success`. `actions/checkout`, `Review the pull request
 (read-only)` and `Post the review and fail on P0 or P1` are all `skipped`. The job lasts well under a minute. The log
 count is ≥ `1`. The variable is `off` and **stays off** (decision 32). Probe PR closed; both branch counts are `0` (gh deletes the local branches too). Record the
-cost of the A3 reviews from the Anthropic console (usage for the key, today) in the execution log.
+usage of the A3 reviews (the Claude subscription's usage page, today) in the execution log.
 
 **A5 — bookkeeping.** Move the Trello card C3c (label `run`) to `Done`. Write the execution log C3c with: the A0
 sha and run URLs, the A3/A4 run URLs and conclusions, the A3 comment-re-review outcome (run or deferred), the cost

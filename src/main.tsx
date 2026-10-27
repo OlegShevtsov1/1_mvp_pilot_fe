@@ -1,6 +1,8 @@
 import * as Sentry from '@sentry/react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import '@fontsource-variable/space-grotesk'
+import './styles/tokens.css'
 import './index.css'
 import App from './App.tsx'
 import ErrorFallback from './ErrorFallback.tsx'

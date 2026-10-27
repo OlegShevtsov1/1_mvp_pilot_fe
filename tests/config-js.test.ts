@@ -19,6 +19,8 @@ const valid = {
   API_URL: 'https://api.example.test',
   SENTRY_DSN: 'https://key@errors.example.test/7',
   ENV_NAME: 'dev',
+  GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
+  OAUTH_CLIENT_ID: 'web-client-uid',
 }
 
 describe('docker/40-config-js.sh', () => {
@@ -30,6 +32,8 @@ describe('docker/40-config-js.sh', () => {
         'window.APP_CONFIG = {',
         '  API_URL: "https://api.example.test",',
         '  SENTRY_DSN: "https://key@errors.example.test/7",',
+        '  GOOGLE_CLIENT_ID: "client-id.apps.example.test",',
+        '  OAUTH_CLIENT_ID: "web-client-uid",',
         '  ENV_NAME: "dev",',
         '  APP_VERSION: "sha-abc123",',
         '};',
@@ -50,6 +54,12 @@ describe('docker/40-config-js.sh', () => {
     expect(readFileSync(out, 'utf8')).toContain('  SENTRY_DSN: "",\n')
   })
 
+  it('accepts an unset GOOGLE_CLIENT_ID and OAUTH_CLIENT_ID (sign-in not configured)', () => {
+    const { status, out } = run({ API_URL: valid.API_URL, ENV_NAME: valid.ENV_NAME })
+    expect(status).toBe(0)
+    expect(readFileSync(out, 'utf8')).toContain('  GOOGLE_CLIENT_ID: "",\n  OAUTH_CLIENT_ID: "",\n')
+  })
+
   it('fails without API_URL and writes nothing', () => {
     const { status, stderr, out } = run({ SENTRY_DSN: '', ENV_NAME: 'dev' })
     expect(status).not.toBe(0)
@@ -68,6 +78,8 @@ describe('docker/40-config-js.sh', () => {
     ['API_URL', 'https://x".example.test'],
     ['SENTRY_DSN', 'https://k@x/1<script>'],
     ['ENV_NAME', "dev'; alert(1)"],
+    ['GOOGLE_CLIENT_ID', 'x"</script>'],
+    ['OAUTH_CLIENT_ID', 'uid";alert(1)//'],
   ])('rejects %s with characters unsafe in JS, without echoing the value', (name, value) => {
     const { status, stderr, out } = run({ ...valid, [name]: value })
     expect(status).not.toBe(0)

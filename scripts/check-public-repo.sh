@@ -9,11 +9,14 @@ cd "$(git rev-parse --show-toplevel)"
 
 status=0
 
+# A rule's patterns, then an optional `--` and the pathspecs it skips.
 check() {
   local label=$1
   shift
-  local out rc
-  out=$(git grep -nI "$@" -- .)
+  local patterns=() out rc
+  while [ $# -gt 0 ] && [ "$1" != -- ]; do patterns+=("$1"); shift; done
+  [ $# -gt 0 ] && shift
+  out=$(git grep -nI "${patterns[@]}" -- . "$@")
   rc=$?
   case $rc in
     0)
@@ -32,7 +35,9 @@ check "IPv4 literal (EIP or internal)" -E  -e '(^|[^0-9.])([0-9]{1,3}\.){3}[0-9]
 check "internal hostname (vr8 prefix)"  -iE -e 'vr8[-]'
 check "internal hostname srvN.local"   -iE -e 'srv[0-9]+\.local'
 check "internal hostname (bonfir[e])"  -iE -e 'bonfir[e]'
-check "AWS account ID (12 digits)"     -E  -e '(^|[^0-9])[0-9]{12}([^0-9]|$)'
+# sync-spec writes `.spec-source` with sha256 digests only, whose digit runs are not account IDs.
+check "AWS account ID (12 digits)"     -E  -e '(^|[^0-9])[0-9]{12}([^0-9]|$)' \
+  -- ':(exclude,glob)docs/features/*/.spec-source'
 check "Route53 hosted zone ID"         -E  -e '(^|[^A-Za-z0-9+/])Z[A-Z0-9]{12,}([^A-Za-z0-9+/=]|$)'
 check "Trello link"                    -iE -e 'trello\.com'
 check "Notion link or page ID"         -iE -e 'notion\.(so|site)' -e '(^|[^0-9a-f])[0-9a-f]{32}([^0-9a-f]|$)'

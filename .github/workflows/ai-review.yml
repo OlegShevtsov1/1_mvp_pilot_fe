@@ -65,7 +65,7 @@ jobs:
         if: steps.switch.outputs.enabled == 'true'
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
           prompt: |
             You are reviewing pull request #${{ github.event.pull_request.number || github.event.issue.number }} of
@@ -104,7 +104,7 @@ jobs:
             Do not report style preferences already enforced by ESLint or TypeScript. When there is nothing to report, return
             an empty findings list. Put a one-paragraph overall assessment in summary.
           claude_args: |
-            --model claude-sonnet-5
+            --model claude-sonnet-5-5
             --max-turns 20
             --allowedTools "Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*)"
             --disallowedTools "Edit,MultiEdit,Write,NotebookEdit,WebFetch,WebSearch,Task"

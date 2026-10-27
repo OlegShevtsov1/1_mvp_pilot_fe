@@ -35,6 +35,7 @@ async function fetchApiStatus(apiUrl: string, signal: AbortSignal): Promise<stri
 function App({ config, errorTest }: AppProps) {
   const apiUrl = config.API_URL
   const debug = config.ENV_NAME === 'dev'
+  const google = Boolean(config.GOOGLE_CLIENT_ID)
   const [apiStatus, setApiStatus] = useState(apiUrl ? 'checking…' : 'not configured')
   const [store] = useState(createTokenStore)
 
@@ -51,7 +52,7 @@ function App({ config, errorTest }: AppProps) {
     <div className="App">
       <BrowserRouter>
         <Routes>
-          <Route path={paths.landing} element={<Landing />} />
+          <Route path={paths.landing} element={<Landing google={google} />} />
           <Route
             path={paths.signUp}
             element={<SignUp apiUrl={apiUrl} store={store} google={<GoogleSignIn config={config} store={store} text="signup_with" />} />}
@@ -71,7 +72,7 @@ function App({ config, errorTest }: AppProps) {
             path={paths.dashboard}
             element={<Dashboard apiUrl={apiUrl} clientId={config.OAUTH_CLIENT_ID} store={store} />}
           />
-          <Route path="*" element={<Landing />} />
+          <Route path="*" element={<Landing google={google} />} />
         </Routes>
       </BrowserRouter>
       {debug && (

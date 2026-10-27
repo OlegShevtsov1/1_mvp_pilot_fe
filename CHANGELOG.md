@@ -24,6 +24,15 @@ Minimum backend version: v0.1.0
 
 ### Security
 
+## [0.3.1] - 2026-10-27
+
+Minimum backend version: v0.1.0
+
+### Fixed
+
+- The landing page no longer offers Google sign-in when `GOOGLE_CLIENT_ID` is empty; it offers sign-up and sign-in
+  with email and password instead.
+
 ## [0.3.0] - 2026-10-27
 
 Minimum backend version: v0.1.0

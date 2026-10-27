@@ -1,5 +1,21 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
+const headline = 'Every project and every task in one calm place'
+
+// The landing offers Google only where the runtime config turns Google sign-in on (dev, not prod).
+async function heroStarts(page: Page) {
+  const google = Boolean(await page.evaluate(() => window.APP_CONFIG?.GOOGLE_CLIENT_ID))
+  const hero = page.getByRole('region', { name: headline })
+  const names = google ? ['Continue with Google', 'Sign up with email and password'] : ['Sign up', 'Sign in']
+  return { google, starts: names.map((name) => hero.getByRole('link', { name, exact: true })) }
+}
+
+async function expectBothStarts(page: Page) {
+  const { google, starts } = await heroStarts(page)
+  for (const start of starts) await expect(start).toBeVisible()
+  if (!google) await expect(page.getByRole('main')).not.toContainText(/google/i)
+}
+
 test('a visitor sees what the app does and both ways to start', async ({ page }) => {
   const apiPaths: string[] = []
   page.on('request', (request) => {
@@ -9,10 +25,9 @@ test('a visitor sees what the app does and both ways to start', async ({ page })
 
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Every project and every task in one calm place')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(headline)
   await expect(page.getByRole('banner').getByRole('link', { name: 'Sign in' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Continue with Google' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Sign up with email and password' })).toBeVisible()
+  await expectBothStarts(page)
   await expect(page.getByRole('listitem')).toHaveCount(0)
   expect(apiPaths).toEqual([])
 })
@@ -30,8 +45,7 @@ test('the landing page fits a 360 px screen', async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' })
   await page.goto('/')
 
-  await expect(page.getByRole('link', { name: 'Continue with Google' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Sign up with email and password' })).toBeVisible()
+  await expectBothStarts(page)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
   await screenshot(page, testInfo, 'landing-mobile-light')
 
@@ -66,13 +80,13 @@ test('the dashboard preview enters after the hero text when motion is enabled', 
 
 test('keyboard focus on a call to action is visible', async ({ page }) => {
   await page.goto('/')
-  const google = page.getByRole('link', { name: 'Continue with Google' })
+  const [primary] = (await heroStarts(page)).starts
 
   // The header's brand and Sign in links come before the hero's first call to action.
   for (let tab = 0; tab < 3; tab++) await page.keyboard.press('Tab')
-  await expect(google).toBeFocused()
-  await expect(google).not.toHaveCSS('outline-style', 'none')
-  await expect(google).not.toHaveCSS('outline-width', '0px')
+  await expect(primary).toBeFocused()
+  await expect(primary).not.toHaveCSS('outline-style', 'none')
+  await expect(primary).not.toHaveCSS('outline-width', '0px')
 })
 
 test('the debug footer shows on dev only', async ({ page }) => {

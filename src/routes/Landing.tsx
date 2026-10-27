@@ -28,14 +28,44 @@ const features = [
     text: 'Show only the projects with tasks in the status you care about now.',
     icon: 'M4 5h16l-6 8v5l-4 2v-7z',
   },
-  {
-    title: 'Sign in your way',
-    text: 'Use your Google account or an email and password; your projects stay yours.',
-    icon: 'M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z',
-  },
 ]
 
-function Landing() {
+function signInFeature(google: boolean) {
+  return {
+    title: google ? 'Sign in your way' : 'Sign in with email',
+    text: google
+      ? 'Use your Google account or an email and password; your projects stay yours.'
+      : 'Use your email and password; your projects stay yours.',
+    icon: 'M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z',
+  }
+}
+
+type Start = { to: string; label: string }
+
+const emailStarts: [Start, Start] = [
+  { to: paths.signUp, label: 'Sign up' },
+  { to: paths.signIn, label: 'Sign in' },
+]
+
+const starts: Record<'hero' | 'final', Record<'google' | 'email', [Start, Start]>> = {
+  hero: {
+    google: [
+      { to: paths.signIn, label: 'Continue with Google' },
+      { to: paths.signUp, label: 'Sign up with email and password' },
+    ],
+    email: emailStarts,
+  },
+  final: {
+    google: [
+      { to: paths.signIn, label: 'Start with Google' },
+      { to: paths.signUp, label: 'Create an account with email' },
+    ],
+    email: emailStarts,
+  },
+}
+
+function Landing({ google }: { google: boolean }) {
+  const variant = google ? 'google' : 'email'
   return (
     <div className="landing">
       <header className="landing-header">
@@ -54,20 +84,13 @@ function Landing() {
             Pilot App keeps your personal projects and their tasks in one place: create a project, add tasks and move
             each one from not started to done.
           </p>
-          <div className="landing-starts">
-            <Link className="landing-start landing-start-primary" to={paths.signIn}>
-              Continue with Google
-            </Link>
-            <Link className="landing-start landing-start-secondary" to={paths.signUp}>
-              Sign up with email and password
-            </Link>
-          </div>
+          <Starts starts={starts.hero[variant]} />
           <Preview />
         </section>
         <section className="landing-features" aria-labelledby="landing-features-title">
           <h2 id="landing-features-title">Everything a personal plan needs</h2>
           <div className="landing-feature-grid">
-            {features.map(({ title, text, icon }) => (
+            {[...features, signInFeature(google)].map(({ title, text, icon }) => (
               <article className="landing-feature" key={title}>
                 <svg className="landing-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path d={icon} />
@@ -80,16 +103,22 @@ function Landing() {
         </section>
         <section className="landing-final" aria-labelledby="landing-final-title">
           <h2 id="landing-final-title">Start your first project in a minute</h2>
-          <div className="landing-starts">
-            <Link className="landing-start landing-start-primary" to={paths.signIn}>
-              Start with Google
-            </Link>
-            <Link className="landing-start landing-start-secondary" to={paths.signUp}>
-              Create an account with email
-            </Link>
-          </div>
+          <Starts starts={starts.final[variant]} />
         </section>
       </main>
+    </div>
+  )
+}
+
+function Starts({ starts: [primary, secondary] }: { starts: [Start, Start] }) {
+  return (
+    <div className="landing-starts">
+      <Link className="landing-start landing-start-primary" to={primary.to}>
+        {primary.label}
+      </Link>
+      <Link className="landing-start landing-start-secondary" to={secondary.to}>
+        {secondary.label}
+      </Link>
     </div>
   )
 }

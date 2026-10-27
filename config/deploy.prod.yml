@@ -20,3 +20,7 @@ env:
   clear:
     API_URL: https://<%= zone %>
     ENV_NAME: prod
+    # Public Google OAuth client id from the GitHub environment variable GOOGLE_CLIENT_ID; never committed, empty when unset.
+    GOOGLE_CLIENT_ID: <%= ENV.fetch("GOOGLE_CLIENT_ID", "").to_json %>
+    # Public uid of the OAuth web application from the GitHub environment variable OAUTH_CLIENT_ID; empty when unset.
+    OAUTH_CLIENT_ID: <%= ENV.fetch("OAUTH_CLIENT_ID", "").to_json %>

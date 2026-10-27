@@ -6,6 +6,8 @@ const config = {
   SENTRY_DSN: 'https://key@errors.example.test/7',
   ENV_NAME: 'dev',
   APP_VERSION: 'sha-abc123',
+  GOOGLE_CLIENT_ID: '',
+  OAUTH_CLIENT_ID: '',
 }
 
 describe('initSentry', () => {

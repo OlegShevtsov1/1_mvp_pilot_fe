@@ -1,0 +1,308 @@
+.page {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-3);
+}
+
+.page h1 {
+  font-size: var(--font-size-xl);
+  margin: 0 0 var(--space-3);
+}
+
+.landing {
+  min-height: 100vh;
+  background: var(--gradient-glow), var(--color-bg);
+}
+
+.landing-header,
+.landing main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: var(--space-3);
+}
+
+.landing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+
+.landing-logo {
+  width: 1.75rem;
+  fill: var(--color-accent);
+  stroke: var(--color-on-accent);
+}
+
+.landing svg {
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.landing h1,
+.landing h2 {
+  margin: 0 auto var(--space-3);
+  font-family: var(--font-family-display);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+}
+
+.landing h1 {
+  max-width: 48rem;
+  font-size: var(--font-size-3xl);
+}
+
+.landing-hero {
+  padding: var(--space-5) 0;
+}
+
+.landing-lead {
+  max-width: 36rem;
+  margin: 0 auto var(--space-4);
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+}
+
+.landing-starts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.landing-start {
+  display: inline-flex;
+  flex: 1 1 100%;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+
+.landing-header .landing-start {
+  flex: none;
+}
+
+.landing-start:focus-visible,
+.landing-brand:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.landing-start-primary {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.landing-start-primary:hover {
+  border-color: var(--color-accent-strong);
+  background: var(--color-accent-strong);
+  box-shadow: var(--shadow-glow);
+}
+
+.landing-start-secondary {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.landing-start-secondary:hover {
+  border-color: var(--color-accent);
+}
+
+.landing-preview {
+  max-width: 56rem;
+  margin: var(--space-5) auto 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  font-size: var(--font-size-sm);
+  text-align: left;
+}
+
+.landing-preview p {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+}
+
+.landing-preview-sidebar {
+  display: none;
+  padding: var(--space-3);
+  border-right: var(--border-width) solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.landing-preview-project.is-active {
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+.landing-preview-main {
+  padding: var(--space-3);
+}
+
+.landing-preview-title {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.landing-preview-task {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.landing-status {
+  width: 1rem;
+  fill: none;
+}
+
+.landing-status-todo {
+  stroke: var(--color-text-muted);
+  stroke-dasharray: 2.5 2.5;
+}
+
+.landing-status-progress {
+  stroke: var(--color-status-progress);
+}
+
+.landing-status-done {
+  fill: var(--color-status-done);
+  stroke: var(--color-status-done);
+}
+
+.landing-status-done path {
+  stroke: var(--color-surface);
+}
+
+.landing-feature-grid {
+  display: grid;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+.landing-feature,
+.landing-final {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.landing-feature {
+  padding: var(--space-4);
+}
+
+.landing-feature:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-glow);
+}
+
+.landing-feature h3 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--font-size-md);
+}
+
+.landing-feature p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.landing-icon {
+  width: 1.5rem;
+  fill: none;
+  stroke: var(--color-accent);
+}
+
+.landing-final {
+  margin: var(--space-5) 0;
+  padding: var(--space-5) var(--space-3);
+  background: var(--gradient-glow), var(--color-surface);
+}
+
+@media (min-width: 48rem) {
+  .landing-hero {
+    padding: var(--space-6) 0 var(--space-5);
+  }
+
+  .landing-start {
+    flex: 0 1 auto;
+  }
+
+  .landing-preview-body {
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+  }
+
+  .landing-preview-sidebar {
+    display: block;
+  }
+
+  .landing-feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 64rem) {
+  .landing-feature-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-hero > *,
+  .landing-feature {
+    animation: landing-rise 600ms var(--easing-standard) backwards;
+  }
+
+  .landing-hero > :nth-child(n + 2) {
+    animation-delay: 120ms;
+  }
+
+  .landing-hero > .landing-preview {
+    animation-delay: 240ms;
+  }
+
+  .landing-start,
+  .landing-feature {
+    transition:
+      background-color var(--duration-base),
+      border-color var(--duration-base),
+      box-shadow var(--duration-base),
+      transform var(--duration-base);
+  }
+
+  .landing-start:hover,
+  .landing-feature:hover {
+    transform: translateY(-2px);
+  }
+
+  @keyframes landing-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+  }
+}

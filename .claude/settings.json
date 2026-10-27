@@ -34,5 +34,8 @@
       "Bash(git tag --force*)",
       "Bash(git tag --delete*)"
     ]
+  },
+  "env": {
+    "SDLC_BASE_BRANCH": "develop"
   }
 }

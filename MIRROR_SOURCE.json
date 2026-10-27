@@ -1,15 +1,21 @@
 {
   "repo": "1_mvp_pilot_fe",
   "source_ref": "origin/main",
-  "source_sha": "ca29e9b1530859e0d6ad1230f0244e1819a36b3c",
-  "mirror_sha": "cddac25816d9593472355bcce952ebd773b4e342",
-  "synced_at": "2026-10-20T22:49:14Z",
+  "source_sha": "edef39e53689ee3bbc28e75fc924bc8e6fe91ae8",
+  "mirror_sha": "037dd6cadb8de70f540edb3429e343970bc82a7b",
+  "synced_at": "2026-10-27T12:43:38Z",
   "tags": [
     {
       "tag": "v0.2.0",
       "primary_sha": "3fddd6e7356ff3707b1afbb81c6137fc67cb0dd1",
       "mirror_sha": "cddac25816d9593472355bcce952ebd773b4e342",
       "synced_at": "2026-10-20T22:49:14Z"
+    },
+    {
+      "tag": "v0.3.0",
+      "primary_sha": "f5143cd75a764a6bcdd7df629947c7e7c2cc8b28",
+      "mirror_sha": "037dd6cadb8de70f540edb3429e343970bc82a7b",
+      "synced_at": "2026-10-27T12:43:38Z"
     }
   ]
 }

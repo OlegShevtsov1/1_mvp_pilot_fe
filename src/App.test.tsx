@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as Sentry from '@sentry/react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import App from './App.tsx'
 import type { AppConfig } from './config.ts'
@@ -10,6 +10,8 @@ const config: AppConfig = {
   SENTRY_DSN: '',
   ENV_NAME: 'dev',
   APP_VERSION: 'sha-abc123',
+  GOOGLE_CLIENT_ID: '',
+  OAUTH_CLIENT_ID: '',
 }
 
 function stubFetch(impl: () => Promise<Response>) {
@@ -32,15 +34,63 @@ describe('App', () => {
     cleanup()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    window.history.pushState({}, '', '/')
+    document.head.querySelectorAll('script[src*="accounts.google.com"]').forEach((script) => script.remove())
+    delete window.google
   })
 
-  it('renders the heading, welcome text and runtime config', () => {
+  it('renders the landing page and the runtime config', () => {
     stubFetch(() => new Promise(() => {}))
     render(<App config={config} errorTest={null} />)
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Pilot App')
-    expect(screen.getByText('Welcome to the Pilot application')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'Every project and every task in one calm place',
+    )
     expect(screen.getByText('API: https://api.example.test')).toBeTruthy()
     expect(screen.getByText('Environment: dev')).toBeTruthy()
+  })
+
+  it.each(['prod', 'unknown'])('hides the debug footer and skips the health check when ENV_NAME is %s', (envName) => {
+    const fetch = stubFetch(async () => Response.json({ status: 'ok' }))
+    render(<App config={{ ...config, ENV_NAME: envName }} errorTest={null} />)
+    expect(screen.queryByTestId('api-status')).toBeNull()
+    expect(screen.queryByText(/^API:/)).toBeNull()
+    expect(screen.queryByRole('contentinfo')).toBeNull()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('unknown paths fall back to the landing page', () => {
+    stubFetch(() => new Promise(() => {}))
+    window.history.pushState({}, '', '/no-such-page')
+    render(<App config={config} errorTest={null} />)
+    expect(screen.getByRole('link', { name: 'Continue with Google' })).toBeTruthy()
+  })
+
+  it.each([
+    ['Continue with Google', 'Sign in'],
+    ['Sign up with email and password', 'Sign up'],
+  ])('the "%s" start opens the %s screen', (link, title) => {
+    stubFetch(() => new Promise(() => {}))
+    render(<App config={config} errorTest={null} />)
+    fireEvent.click(screen.getByRole('link', { name: link }))
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title)
+  })
+
+  it('a visitor on the landing page loads no project data', async () => {
+    const fetch = stubFetch(async () => Response.json({ status: 'ok' }))
+    render(<App config={config} errorTest={null} />)
+    await screen.findByText('API status: ok')
+    expect(fetch).toHaveBeenCalledOnce()
+    expect(fetch).toHaveBeenCalledWith('https://api.example.test/health', expect.anything())
+  })
+
+  it('a signed-out visitor opening /dashboard is sent to sign-in', async () => {
+    const fetch = stubFetch(async () => Response.json({ status: 'ok' }))
+    window.history.pushState({}, '', '/dashboard')
+    render(<App config={config} errorTest={null} />)
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('Sign in')
+    await screen.findByText('API status: ok')
+    expect(fetch).toHaveBeenCalledOnce()
+    expect(fetch).toHaveBeenCalledWith('https://api.example.test/health', expect.anything())
   })
 
   it('shows the status the backend reports from /health', async () => {
@@ -80,5 +130,36 @@ describe('App', () => {
       </Sentry.ErrorBoundary>,
     )
     expect(screen.getByRole('alert').textContent).toBe('fallback')
+  })
+
+  it("Google's script is loaded on the sign-in and sign-up screens only", () => {
+    stubFetch(() => new Promise(() => {}))
+    const withGoogle = { ...config, GOOGLE_CLIENT_ID: 'client-id.apps.example.test' }
+    const googleScript = () => document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
+
+    render(<App config={withGoogle} errorTest={null} />)
+    expect(googleScript()).toBeNull()
+    cleanup()
+
+    for (const path of ['/sign-in', '/sign-up']) {
+      window.history.pushState({}, '', path)
+      render(<App config={withGoogle} errorTest={null} />)
+      expect(googleScript()).not.toBeNull()
+      cleanup()
+      googleScript()?.remove()
+    }
+  })
+
+  it("leaving the sign-in screen removes Google's script", async () => {
+    stubFetch(() => new Promise(() => {}))
+    const googleScript = () => document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
+    window.history.pushState({}, '', '/sign-in')
+    render(<App config={{ ...config, GOOGLE_CLIENT_ID: 'client-id.apps.example.test' }} errorTest={null} />)
+    expect(googleScript()).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back to the start' }))
+
+    expect(await screen.findByRole('link', { name: 'Continue with Google' })).toBeTruthy()
+    expect(googleScript()).toBeNull()
   })
 })

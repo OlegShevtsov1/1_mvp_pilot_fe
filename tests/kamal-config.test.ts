@@ -2,10 +2,11 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { projectEnv, repoRoot, runScript, tempDir } from './support.ts'
 
 // Renders a Kamal config file the way Kamal does (ERB, then YAML) and returns it as JSON.
-function renderKamalConfig(file: string) {
+function renderKamalConfig(file: string, env: Record<string, string | undefined> = {}) {
   const result = spawnSync(
     'ruby',
     ['-rerb', '-ryaml', '-rjson', '-e', 'puts JSON.generate(YAML.load(ERB.new(File.read(ARGV[0])).result))', file],
@@ -16,6 +17,9 @@ function renderKamalConfig(file: string) {
         DEV_HOST: 'dev-host.invalid',
         PROD_VPN_IP: 'prod-host.invalid',
         ECR_REGISTRY: 'registry.invalid',
+        GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
+        OAUTH_CLIENT_ID: 'web-client-uid',
+        ...env,
       },
       encoding: 'utf8',
     },
@@ -93,6 +97,44 @@ describe('Kamal prod config', () => {
   })
 
   it('points the app at the prod API', () => {
-    expect(prod.env.clear).toEqual({ API_URL: `https://${zone}`, ENV_NAME: 'prod' })
+    expect(prod.env.clear).toEqual({
+      API_URL: `https://${zone}`,
+      ENV_NAME: 'prod',
+      GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
+      OAUTH_CLIENT_ID: 'web-client-uid',
+    })
+  })
+})
+
+describe.each([
+  ['GOOGLE_CLIENT_ID', 'client-id.apps.example.test'],
+  ['OAUTH_CLIENT_ID', 'web-client-uid'],
+])('%s', (variable, value) => {
+  it.each(['config/deploy.dev.yml', 'config/deploy.prod.yml'])(
+    '%s passes the deploy environment value to the app as a public value',
+    (file) => {
+      const config = renderKamalConfig(file)
+      expect(config.env.clear[variable]).toBe(value)
+      expect(config.env.secret ?? []).not.toContain(variable)
+      expect(renderKamalConfig(file, { [variable]: undefined }).env.clear[variable]).toBe('')
+    },
+  )
+
+  it('every workflow step that runs Kamal passes it from vars', () => {
+    const steps = [
+      ['dev-deploy.yml', 'Deploy or roll back with Kamal'],
+      ['kamal-deploy.yml', 'Deploy with Kamal'],
+      ['kamal-manage.yml', 'Run the action with Kamal'],
+    ]
+    for (const [file, name] of steps) {
+      const workflow = parse(readFileSync(join(repoRoot, '.github', 'workflows', file), 'utf8')) as {
+        jobs: Record<string, { steps?: { name?: string; env?: Record<string, string> }[] }>
+      }
+      const step = Object.values(workflow.jobs)
+        .flatMap((job) => job.steps ?? [])
+        .find((candidate) => candidate.name === name)
+      expect(step, `${file}: ${name}`).toBeDefined()
+      expect(step?.env?.[variable], `${file}: ${name}`).toBe(`\${{ vars.${variable} }}`)
+    }
   })
 })

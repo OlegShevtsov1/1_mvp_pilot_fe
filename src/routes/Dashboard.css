@@ -1,0 +1,20 @@
+.dashboard {
+  text-align: left;
+}
+
+.dashboard-guide,
+.dashboard-filter {
+  margin: 0 0 var(--space-3);
+}
+
+.project-list {
+  list-style: none;
+  padding: 0;
+}
+
+.project-list > li {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}

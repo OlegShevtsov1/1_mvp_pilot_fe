@@ -1,0 +1,61 @@
+{
+  "files": {
+    "PRD.md": {
+      "copy_sha256": "cbd5f234ceee59c39f9b9ea191306825d924835087361103d9c852e27aa3eaea",
+      "source_sha256": "858425984af1cb6b590fa354bb22cd52a2db378707606b7e255d0f61d245684f"
+    },
+    "adr/0001-build-todolist-as-backend-api-plus-web-spa.md": {
+      "copy_sha256": "3c8d643d324b0b171af1e11dd8b280ce6d1c1938de86bf2f4cbac8140e9c00a9",
+      "source_sha256": "70bd695e9029d9b78e1587d19f99e9d3c80a2221edf2275023001b712f8da5c8"
+    },
+    "adr/0002-client-side-spa-in-existing-react-app.md": {
+      "copy_sha256": "fd95a6ea72bfc983b6b2defb587bd3d74f781364add68000a725136006d5e3f2",
+      "source_sha256": "3e3cbe872e7d48eb31cfa6dcc4fdf0f63924e060210eee546ed459694b3c4ac5"
+    },
+    "adr/0003-issue-revocable-opaque-tokens-with-doorkeeper.md": {
+      "copy_sha256": "ef81bfb9633876047c2f9721a0a3b86da2cced9513d4f487434552905ce11d42",
+      "source_sha256": "40a88cbb87f1d51eaf13db9d4ff7e87e92e023b6c7a1b816ddcbd9acd8434102"
+    },
+    "adr/0004-exchange-verified-google-id-token-for-access-token.md": {
+      "copy_sha256": "b25459698c9401695b438fe8e7652c671ee491580a3e3260cd328699f9ce4c9a",
+      "source_sha256": "53885487fe8e7db2caaef1cfac9e87206dced6dba1ebb03f4ae54d524a84d282"
+    },
+    "adr/0005-accept-legacy-headers-alongside-bearer-until-evidence-cutoff.md": {
+      "copy_sha256": "43b6152994c859dd4f8062ea030ad9a92dc3197837676b509abf91ebf5d161f0",
+      "source_sha256": "fa5bb6562164dc463b0d196d983d43038b547fcd545d4982791ee54bcae6ba9c"
+    },
+    "adr/0006-short-access-token-with-rotating-30-day-idle-refresh-token.md": {
+      "copy_sha256": "42cdb195b91a316ed944a675f93e1596d22e597edcc90548e861b199867b0320",
+      "source_sha256": "89cb9711a3284e155c80836772fabe0d9788820e5a0e8d054d96435d5276abec"
+    },
+    "adr/0007-scope-project-and-task-lookups-to-the-owner.md": {
+      "copy_sha256": "25e6c7e8a4429f17d2569488ddb2d9210306797b3eccc610da18d90285a1a035",
+      "source_sha256": "7c7b73ac7ba892d00ffa0af541fa7260e9218bc448665ae9f78f7269e24f2b3d"
+    },
+    "adr/0008-sign-up-returns-legacy-fields-only-without-a-configured-web-client.md": {
+      "copy_sha256": "f078922db879096b24c24927a0f807267b19eebddd640c7ebbc133b1804cfcb1",
+      "source_sha256": "cd306fdf00f7b581262a75787920562408c67d40fcbb0a2fccf9b005bea7b21c"
+    },
+    "contracts/api-sync-report.md": {
+      "copy_sha256": "30667f712be8fe7e7f3794f58c3de4a29747bc1b335e40c7632100d92b95a66a",
+      "source_sha256": "aacb552bf5a5904be9acbbe2ff37176d42e9ac6cbf284201c66f2125800f5e05"
+    },
+    "contracts/openapi.yaml": {
+      "copy_sha256": "717804b66be4f08c0960c4f220c0845cb4cabd8b593a4540d5f2c8c2f4778bf6",
+      "source_sha256": "5efcc0fcf6f2d6583d104f5ec9384c00adf55628f1e5702518d737de05dd16f7"
+    },
+    "sad.md": {
+      "copy_sha256": "dbb9a44400ffd0a7d358b7991ab9ca36406043d75b2f994a292b495bd6dc3858",
+      "source_sha256": "0d85e2d0aae68d67142b52e48f7740889d686813800713f3c1607a6d27939bfc"
+    },
+    "test-plan.md": {
+      "copy_sha256": "2f8b02f0f14675b351ea2ad44f2da40d15693eff476e5680f10f41bd8cf52518",
+      "source_sha256": "4b8f3815bc4c6ebde69c81790e2a7f2888035930587056a76b2cfa913efaf7ff"
+    }
+  },
+  "source_repo": "git@github.OlegShevtsov1:OlegShevtsov1/1_mvp_pilot_be.git",
+  "source_sha": "f8d0b86d06ead4db12af522fa3497992646bd2d0",
+  "trello_card_id": "6ad9e7a3497aff024e1928c0",
+  "trello_card_id_short": 222,
+  "trello_card_title": "todolist: TODO List \u2014 landing, Google/login auth, dashboard (devise + doorkeeper)"
+}

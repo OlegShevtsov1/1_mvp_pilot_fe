@@ -15,8 +15,10 @@ built and deploys it (Claude Code plugins and the Archon factory) is in
 
 ## Architecture
 
-The SPA talks only to the backend API (`API_URL` from `/config.js`); browser errors are sent through the
-backend's `/api/errors` tunnel to GlitchTip, so no third-party host is contacted from the page. The C4 container
+The SPA talks to the backend API (`API_URL` from `/config.js`); browser errors are sent through the
+backend's `/api/errors` tunnel to GlitchTip. The one third-party host the page contacts is Google's sign-in
+script (`https://accounts.google.com/gsi/client`, allowed by the Content-Security-Policy), loaded only by the
+sign-in and sign-up screens and only when `GOOGLE_CLIENT_ID` is set. The C4 container
 diagram, module inventory, conventions and known technical debt are in
 [docs/architecture-map.md](docs/architecture-map.md); the domain glossary is [CONTEXT.md](CONTEXT.md).
 
@@ -46,15 +48,18 @@ npm ci
 npm run dev        # dev server on http://localhost:3000
 ```
 
-Without a runtime config the page shows `API status: not configured` and error
-reporting stays off. To talk to a backend locally, create the gitignored
+Without a runtime config error reporting stays off, and the debug footer
+(API URL, environment, API status) is hidden: it shows only when `ENV_NAME` is
+`dev`. To talk to a backend locally, create the gitignored
 `public/config.js`:
 
 ```js
 window.APP_CONFIG = {
   API_URL: "http://localhost:3001",
   SENTRY_DSN: "",
-  ENV_NAME: "local",
+  GOOGLE_CLIENT_ID: "",
+  OAUTH_CLIENT_ID: "",
+  ENV_NAME: "dev",
   APP_VERSION: "local",
 };
 ```
@@ -84,7 +89,8 @@ covers the SDLC scripts (`tdd-check`, `main-guard`, the bundle check,
 release tooling: versions, CHANGELOG sections and checks on git fixtures, the
 release and changelog-check workflows, the tag pre-push hook, release-watch,
 the backend release-order check, `bin/sdlc-metrics`, the nginx cache
-headers, and the AI review workflow and its report script.
+headers and Content-Security-Policy, and the AI review workflow and its report
+script.
 
 CI also scans the full git history for secrets with
 [gitleaks](https://github.com/gitleaks/gitleaks) and lints the workflows with
@@ -111,7 +117,8 @@ that every commit on `main` came from a merged pull request, and its twin
 does the same for `develop`.
 [`.github/workflows/pr-conventions-check.yml`](.github/workflows/pr-conventions-check.yml)
 checks the branch name, title and `Type:` line of pull requests into `develop`
-and `main`. All are described under "Development process (SDLC)".
+and `main`, and that a release pull request carries its changelog. All are
+described under "Development process (SDLC)".
 [`.github/workflows/ai-review.yml`](.github/workflows/ai-review.yml) is the
 switchable AI review of pull requests, described under "AI PR review".
 
@@ -150,9 +157,10 @@ review request. It skips `archon/task-factory-*` heads (the factory reviews its
 own pull requests, decision R-C5), Dependabot, drafts and the release pull request
 `develop → main`.
 
-The review uses Sonnet (decision R-C12), at most 20 turns and read-only tools: the
-model cannot write files or post to GitHub. It returns its findings as
-structured output, and `scripts/ai-review-report.sh` posts them as one
+The review uses Sonnet 5.5 (`claude-sonnet-5-5`, decisions R-C12 and 59 b), at
+most 20 turns and read-only tools: the model cannot write files or post to
+GitHub. It returns its findings as structured output, and
+`scripts/ai-review-report.sh` posts them as one
 `AI review` comment (updated in place on later runs) whose third line is
 `AI-REVIEW: P0=… P1=… P2=…`, and writes `ai-review/result.json`. Red means at
 least one P0 or P1, or no summary at all (the review failed, hit its turn limit
@@ -169,15 +177,16 @@ request head; to change the check, push or use "Re-run jobs" on the pull
 request's run. Comment re-reviews do not apply the factory, draft and release
 skips.
 
-Secrets (names only): `ANTHROPIC_API_KEY`, passed as the action input
-`anthropic_api_key`. A Claude subscription token `CLAUDE_CODE_OAUTH_TOKEN` is
-the alternative: replace that input in `ai-review.yml` with
-`claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}`.
+Secrets (names only): `CLAUDE_CODE_OAUTH_TOKEN`, the Claude subscription token
+(decision 33 a), passed as the action input `claude_code_oauth_token`. An
+Anthropic API key `ANTHROPIC_API_KEY` is the alternative: replace that input in
+`ai-review.yml` with `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}`.
 
 Cost: with `on`, every push, reopen or review request on a pull request that is
 not skipped is one billed review; a new push cancels the run still in progress.
-The cost shows in the Anthropic console for the key. Leave it `off` unless
-needed.
+Reviews count against the usage limits of the Claude subscription behind the
+token (with the API key alternative they are billed in the Anthropic console).
+Leave it `off` unless needed.
 
 ## Development process (SDLC)
 
@@ -212,8 +221,10 @@ requires, on every pull request into `develop` or `main`, such a branch name
 (or `develop` as the head of a release pull request into `main`), the title
 `PILOT-<n>: <card title>`, and exactly one line
 `Type: feat|fix|chore|docs|refactor|test|ci` in the body, which becomes the
-squash commit body. The check reports "not applicable" until the `develop`
-branch exists.
+squash commit body. A pull request titled `PILOT-<n>: Release vX.Y.Z` must
+also have a `## Changelog` heading followed by the `[X.Y.Z]` section of
+`CHANGELOG.md` (decision 64; see [Cutting a release](#cutting-a-release)). The
+check reports "not applicable" until the `develop` branch exists.
 
 `tdd-check` ([`scripts/tdd-check.sh`](scripts/tdd-check.sh)) applies to a
 pull request that changes non-test files under `src/`, `bin/`, `deploy/`,
@@ -250,6 +261,8 @@ environment:
 |----------|--------------------|-------|
 | `API_URL` | `API_URL` | Required. Backend base URL, e.g. `https://dev.pilot.up.km.ua` |
 | `SENTRY_DSN` | `SENTRY_DSN` | Optional. Empty turns error reporting off |
+| `GOOGLE_CLIENT_ID` | `GOOGLE_CLIENT_ID` | Optional. Public Google OAuth client id from the GitHub environment variable; empty turns Google sign-in off |
+| `OAUTH_CLIENT_ID` | `OAUTH_CLIENT_ID` | Optional. Public uid of the backend's OAuth web application from the GitHub environment variable; sent as `client_id` when the app asks for tokens |
 | `ENV_NAME` | `ENV_NAME` | Required. Sent as the error `environment`, e.g. `dev` |
 | `KAMAL_VERSION` | `APP_VERSION` | Set by Kamal to the deployed image tag; `local` otherwise. Sent as the error `release` |
 
@@ -257,16 +270,20 @@ Values may only contain URL characters (`A-Z a-z 0-9 . _ ~ : / ? # @ & = % + -`)
 A missing required value or any other character stops the container with
 `config.js: <NAME> ...`, so a bad config fails Kamal's health check instead of
 being served. nginx serves `/config.js` with `Cache-Control: no-store`, and
-`index.html` loads it before the app. To try the image locally:
+`index.html` loads it before the app. HTML answers carry a Content-Security-Policy
+(`nginx.conf`, installed as an nginx template) whose `connect-src` takes the API
+origin from `API_URL` when the container starts. To try the image locally:
 
 ```bash
 docker build -t pilot-front-local .
-docker run --rm -p 8080:80 -e API_URL=http://localhost:3001 -e ENV_NAME=local pilot-front-local
+docker run --rm -p 8080:80 -e API_URL=http://localhost:3001 -e ENV_NAME=dev pilot-front-local
 curl -s localhost:8080/config.js
 ```
 
-The page calls `GET <API_URL>/health` and shows the reported status
-(`API status: ok`), or `unreachable` when the request fails.
+When `ENV_NAME` is `dev`, the page calls `GET <API_URL>/health` and shows the
+reported status in its debug footer (`API status: ok`), or `unreachable` when
+the request fails; on any other environment it makes no such call and shows no
+footer.
 
 ## Error reporting
 
@@ -495,7 +512,21 @@ it.
    prints), drop its empty headings, keep the minimum backend line, and add a
    fresh `## [Unreleased]` with the six headings above it.
    `scripts/release-notes.sh vX.Y.Z` prints the section.
-2. Release PR `develop → main`, merged by the operator with a merge commit.
+2. Release PR `develop → main`, titled `PILOT-<n>: Release vX.Y.Z`, merged by
+   the operator with a merge commit. Its body carries a `## Changelog` heading
+   followed by the full `[X.Y.Z]` section of `CHANGELOG.md` on `develop`;
+   pr-conventions-check stays red until it does (blank lines and trailing
+   spaces do not count, the heading may read `## Changelog (vX.Y.Z)`), and
+   editing the body re-runs it. Build the body from the section itself:
+
+   ```bash
+   git fetch origin && git show origin/develop:CHANGELOG.md >/tmp/CHANGELOG.develop.md
+   { printf 'Release vX.Y.Z.\n\n## Changelog\n\n'
+     CHANGELOG_FILE=/tmp/CHANGELOG.develop.md scripts/release-notes.sh vX.Y.Z
+     printf '\nType: chore\n'; } >/tmp/release-body.md
+   gh pr create --base main --head develop --title 'PILOT-<n>: Release vX.Y.Z' --body-file /tmp/release-body.md
+   ```
+
 3. Tag the merge commit and push the tag:
 
    ```bash
@@ -616,13 +647,27 @@ against its real backend. They are not part of CI.
   - `/config.js` names that environment, its API host and an image version;
   - no app or API host is baked into the bundle.
 - `e2e/api.spec.ts`:
-  - the page shows `API status: ok` from a real cross-origin call;
+  - a real cross-origin call from the app origin to `<API_URL>/health`
+    answers `status: ok`;
   - the API allows the app origin;
   - the API does not allow a foreign origin.
 - `e2e/error-tunnel.spec.ts`:
   - each error kind is posted to `<API_URL>/api/errors`;
   - no request goes to another host;
   - it prints the marker, so the event can be found in the error tracker.
+- `e2e/landing.spec.ts`:
+  - the landing page shows its heading, the header sign-in link and both
+    start links;
+  - it shows no project or task data and calls no `/api/v1/` endpoint;
+  - it fits a 360 px screen;
+  - it follows the system light and dark theme;
+  - it does not animate when reduced motion is requested;
+  - the dashboard preview's entrance is staggered after the hero text;
+  - keyboard focus on a start link is visible;
+  - the debug footer shows on dev only;
+  - it saves screenshots under `test-results/`: `landing-desktop-light`,
+    `landing-desktop-dark` (1440×900), `landing-mobile-light` and
+    `landing-mobile-dark` (360×780).
 
 ```bash
 npx playwright install chromium

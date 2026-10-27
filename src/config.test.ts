@@ -8,12 +8,21 @@ describe('readConfig', () => {
       SENTRY_DSN: 'https://key@errors.example.test/7',
       ENV_NAME: 'dev',
       APP_VERSION: 'sha-abc123',
+      GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
+      OAUTH_CLIENT_ID: 'web-client-uid',
     }
     expect(readConfig(served)).toEqual(served)
   })
 
   it('falls back to defaults when /config.js is missing or partial', () => {
-    const defaults = { API_URL: '', SENTRY_DSN: '', ENV_NAME: 'unknown', APP_VERSION: 'local' }
+    const defaults = {
+      API_URL: '',
+      SENTRY_DSN: '',
+      ENV_NAME: 'unknown',
+      APP_VERSION: 'local',
+      GOOGLE_CLIENT_ID: '',
+      OAUTH_CLIENT_ID: '',
+    }
     expect(readConfig(undefined)).toEqual(defaults)
     expect(readConfig({ ENV_NAME: 'dev' })).toEqual({ ...defaults, ENV_NAME: 'dev' })
   })

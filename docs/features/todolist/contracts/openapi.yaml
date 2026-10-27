@@ -1,0 +1,618 @@
+# Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/contracts/openapi.yaml by sync-spec. Do not edit here.
+# Contract of record for the todolist feature (rules: .claude/rules/api.md). Derived from PRD.md, sad.md (§6, ADR-0003 to
+# ADR-0007) and data-model.md; see api-sync-report.md. Conventions are the API's existing ones (success wrapped in
+# `data`, errors as `errors` / `error`), not the api-forge defaults, so no existing shape breaks.
+# All example values are placeholders.
+openapi: 3.1.0
+
+info:
+  title: todolist API
+  version: 0.2.0
+  description: |
+    Opens the project and task API to the public: a visitor signs up with Google sign-in or with email and password,
+    every sign-in gives the device its own revocable access token, and the user manages their own projects and tasks.
+    The legacy access token (email plus token headers) stays accepted until the cutoff in ADR-0005 and is then removed
+    in a later contract release. Another user's project or task is answered as not found (ADR-0007).
+
+servers:
+  - url: http://localhost:3000
+    description: Local
+
+# Every operation needs an access token, or the legacy headers until the cutoff, unless it declares `security: []`.
+security:
+  - BearerAuth: []
+  - LegacyAccessToken: []
+    LegacyEmail: []
+
+paths:
+  /oauth/token:
+    post:
+      summary: Get an access token and a refresh token
+      description: |
+        One endpoint, three grants. `password` signs in with email and password (AC-08, AC-09). `google_id_token`
+        verifies a Google ID token, then creates the user or links Google to the existing user of the same email and
+        cancels that user's password and all existing access (AC-05, AC-06, AC-07, ADR-0004). `refresh_token`
+        replaces a token pair; a refresh token 30 days old or revoked is refused (ADR-0006). Failed `password`
+        attempts are counted per source: above 10 a minute the attempt is refused before the password is checked
+        (AC-10).
+      operationId: createToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: "#/components/schemas/TokenRequest" }
+            examples:
+              password:
+                value: { grant_type: password, client_id: "<client-id>", username: "user@example.test", password: "<password>" }
+              google:
+                value: { grant_type: google_id_token, client_id: "<client-id>", id_token: "<google-id-token>" }
+              refresh:
+                value: { grant_type: refresh_token, client_id: "<client-id>", refresh_token: "<refresh-token>" }
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenRequest" }
+      responses:
+        "200":
+          description: Token pair for this device; other devices keep their access
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "400":
+          description: |
+            Grant refused: wrong email or password (one answer for both, AC-09), Google did not confirm the email or
+            the step was cancelled (AC-07), or the refresh token is revoked or too old. Nothing is created or linked.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+              example: { error: invalid_grant, error_description: "The provided authorization grant is invalid." }
+        "401":
+          description: Unknown client
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthError" }
+        "429": { $ref: "#/components/responses/TooManyAttempts" }
+
+  /oauth/revoke:
+    post:
+      summary: Revoke one token (standard form; the web app signs out through /api/v1/sign_out)
+      operationId: revokeToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [client_id, token]
+              additionalProperties: false
+              properties:
+                client_id: { type: string }
+                token: { type: string, description: the access token or refresh token to revoke }
+      responses:
+        "200":
+          description: Revoked, or the token was unknown (the answer does not tell)
+
+  /api/v1/users:
+    post:
+      summary: Sign up with email and password (US-02)
+      description: |
+        Creates the user and signs this device in. `authentication_token` is the legacy access token and is returned
+        until the cutoff; the three token fields are new (additive) and absent while no web client is configured
+        (ADR-0008). Too many sign-ups from one source are refused (5 an hour, AC-04b).
+      operationId: createUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreate" }
+            example: { user: { email: "user@example.test", password: "<password>", password_confirmation: "<password>" } }
+      responses:
+        "201":
+          description: User created; AC-02
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignUpResult" }
+        "422":
+          description: |
+            Malformed email, password shorter than the minimum, mismatched confirmation (AC-03), or an email that
+            already belongs to a user (AC-04, the message says an account with this email exists)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorList" }
+              example: { status: error, message: "User could not be created", errors: ["Email has already been taken"] }
+        "429": { $ref: "#/components/responses/TooManyAttempts" }
+
+  /api/v1/sign_in:
+    post:
+      summary: Legacy sign-in with email and password (deprecated, removed at the cutoff)
+      description: |
+        Returns the legacy access token. Kept so existing clients can still sign in until the cutoff (ADR-0005). Its
+        failed attempts are counted with those of /oauth/token (AC-10).
+      operationId: signInLegacy
+      deprecated: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegacySignIn" }
+            example: { email: "user@example.test", password: "<password>" }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegacySignInResult" }
+        "401":
+          description: Wrong email or wrong password, one message for both (AC-09)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StatusMessage" }
+              example: { status: error, message: "Invalid email or password" }
+        "429": { $ref: "#/components/responses/TooManyAttempts" }
+
+  /api/v1/sign_out:
+    post:
+      summary: Sign out on this device (US-05)
+      description: |
+        With a bearer access token: revokes this device's access and refresh tokens at once, other devices keep
+        working (AC-11). With the legacy headers: rotates the user's legacy access token, so it stops working for every
+        device that uses it (AC-11b).
+      operationId: signOut
+      responses:
+        "204":
+          description: Signed out
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+
+  /api/v1/me:
+    get:
+      summary: The signed-in user's profile
+      operationId: getMe
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+
+  /api/v1/projects:
+    get:
+      summary: List my projects with their tasks (US-09, AC-20)
+      description: Only the signed-in user's projects. With `task_status`, only projects that have a task in that status.
+      operationId: listProjects
+      parameters:
+        - in: query
+          name: task_status
+          schema: { $ref: "#/components/schemas/TaskStatus" }
+      responses:
+        "200":
+          description: Projects; an empty list drives the guided empty state (AC-21)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectList" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+    post:
+      summary: Create a project (US-07, AC-14)
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectWrite" }
+            example: { project: { name: "Test project", description: "A test project with a long enough description" } }
+      responses:
+        "201":
+          description: Created; the caller is its project owner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectResult" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "422":
+          description: Name outside 5-20 characters or description outside 20-120 characters (AC-15)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorList" }
+              example: { errors: ["Name is too short (minimum is 5 characters)"] }
+
+  /api/v1/projects/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      summary: Show one of my projects
+      operationId: getProject
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectResult" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      summary: Rename or edit one of my projects (AC-14)
+      operationId: updateProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectWrite" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectResult" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Name or description outside the allowed length (AC-15)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorList" }
+    delete:
+      summary: Delete one of my projects when it has no tasks
+      operationId: deleteProject
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: The project still has tasks, so it is kept (AC-16)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorList" }
+              example: { errors: ["Cannot delete record because dependent tasks exist"] }
+
+  /api/v1/projects/{project_id}/tasks:
+    parameters:
+      - $ref: "#/components/parameters/ProjectIdInPath"
+    get:
+      summary: List the tasks of one of my projects
+      operationId: listTasks
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskList" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      summary: Add a task to one of my projects (US-08, AC-18)
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskWrite" }
+            example: { task: { name: "Test task", description: "Test task description", status: not_started } }
+      responses:
+        "201":
+          description: Created; AC-18 starts a task as not_started when the status is omitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskResult" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Empty name or description, or a status outside the three (AC-19)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorList" }
+
+  /api/v1/projects/{project_id}/tasks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectIdInPath"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      summary: Show one task
+      operationId: getTask
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskResult" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      summary: Edit a task or change its status in one step (AC-18)
+      operationId: updateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskWrite" }
+            example: { task: { status: completed } }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskResult" }
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Empty name or description, or a status outside the three (AC-19)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorList" }
+    delete:
+      summary: Delete a task
+      operationId: deleteTask
+      responses:
+        "204":
+          description: Deleted
+        "401": { $ref: "#/components/responses/NotAuthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: The access token from /oauth/token, one hour, replaced through the refresh token (ADR-0003, ADR-0006).
+    LegacyAccessToken:
+      type: apiKey
+      in: header
+      name: X-User-Token
+      description: Legacy access token, used with LegacyEmail until the cutoff (ADR-0005). Counted daily per user.
+    LegacyEmail:
+      type: apiKey
+      in: header
+      name: X-User-Email
+
+  parameters:
+    ProjectId:
+      in: path
+      name: id
+      required: true
+      schema: { type: integer }
+    ProjectIdInPath:
+      in: path
+      name: project_id
+      required: true
+      schema: { type: integer }
+    TaskId:
+      in: path
+      name: id
+      required: true
+      schema: { type: integer }
+
+  responses:
+    NotAuthorized:
+      description: |
+        No valid access token. Also: a revoked or expired access token, a legacy access token after the cutoff or after
+        sign-out or Google linking (AC-13, AC-11b), or a visitor who is not signed in (AC-22). The frontend then
+        refreshes once, or sends the visitor to sign-in.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorMessage" }
+          example: { error: "Not Authorized" }
+    NotFound:
+      description: |
+        The project or task does not exist, or belongs to another user. The two cases are indistinguishable (AC-17,
+        ADR-0007). This replaces the former forbidden answer.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorMessage" }
+          example: { error: "Not Found" }
+    TooManyAttempts:
+      description: |
+        Too many attempts from this source: more than 10 failed sign-ins a minute (AC-10) or more than 5 sign-ups an
+        hour (AC-04b). Refused before anything is checked.
+      headers:
+        Retry-After:
+          description: Seconds to wait
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorList" }
+          example: { errors: ["Too many attempts, try again later"] }
+
+  schemas:
+    TaskStatus:
+      type: string
+      enum: [not_started, in_progress, completed]
+
+    ErrorMessage:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { type: string }
+
+    ErrorList:
+      type: object
+      required: [errors]
+      properties:
+        status: { type: string, enum: [error] }
+        message: { type: string }
+        errors:
+          type: array
+          items: { type: string }
+
+    StatusMessage:
+      type: object
+      required: [status, message]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [error, success] }
+        message: { type: string }
+
+    OAuthError:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { type: string, examples: [invalid_grant] }
+        error_description: { type: string }
+
+    TokenRequest:
+      type: object
+      required: [grant_type, client_id]
+      additionalProperties: false
+      properties:
+        grant_type: { type: string, enum: [password, google_id_token, refresh_token] }
+        client_id: { type: string, description: the public id of the registered web client }
+        username: { type: string, format: email, description: required for password }
+        password: { type: string, description: required for password }
+        id_token: { type: string, description: "the Google ID token, required for google_id_token" }
+        refresh_token: { type: string, description: required for refresh_token }
+
+    TokenPair:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token, created_at]
+      additionalProperties: false
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        expires_in: { type: integer, const: 3600 }
+        refresh_token: { type: string }
+        created_at: { type: integer, description: Unix time of issue }
+
+    UserCreate:
+      type: object
+      required: [user]
+      properties:
+        user:
+          type: object
+          required: [email, password, password_confirmation]
+          additionalProperties: false
+          properties:
+            email: { type: string, format: email }
+            password: { type: string, minLength: 6, maxLength: 128 }
+            password_confirmation: { type: string }
+
+    SignUpResult:
+      type: object
+      required: [status, message, data]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [success] }
+        message: { type: string }
+        data:
+          type: object
+          description: The three token fields are present together, or absent while no web client is configured (ADR-0008)
+          required: [user_id, email, authentication_token]
+          additionalProperties: false
+          properties:
+            user_id: { type: integer }
+            email: { type: string, format: email }
+            authentication_token: { type: string, description: "legacy access token, removed at the cutoff" }
+            access_token: { type: string }
+            refresh_token: { type: string }
+            expires_in: { type: integer, const: 3600 }
+
+    LegacySignIn:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    LegacySignInResult:
+      type: object
+      required: [status, message, data]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [success] }
+        message: { type: string }
+        data:
+          type: object
+          required: [user_id, email, authentication_token]
+          additionalProperties: false
+          properties:
+            user_id: { type: integer }
+            email: { type: string, format: email }
+            authentication_token: { type: string }
+
+    Profile:
+      type: object
+      required: [status, message, data]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [success] }
+        message: { type: string }
+        data:
+          type: object
+          required: [user_id, email]
+          additionalProperties: false
+          properties:
+            user_id: { type: integer }
+            email: { type: string, format: email }
+
+    Task:
+      type: object
+      required: [id, name, description, status]
+      properties:
+        id: { type: integer }
+        name: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        status: { $ref: "#/components/schemas/TaskStatus" }
+
+    TaskWrite:
+      type: object
+      required: [task]
+      properties:
+        task:
+          type: object
+          additionalProperties: false
+          properties:
+            name: { type: string, minLength: 1 }
+            description: { type: string, minLength: 1 }
+            status: { $ref: "#/components/schemas/TaskStatus" }
+
+    TaskResult:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/Task" }
+
+    TaskList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Task" }
+
+    Project:
+      type: object
+      required: [id, name, description, tasks]
+      properties:
+        id: { type: integer }
+        name: { type: string, minLength: 5, maxLength: 20 }
+        description: { type: string, minLength: 20, maxLength: 120 }
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/Task" }
+
+    ProjectWrite:
+      type: object
+      required: [project]
+      properties:
+        project:
+          type: object
+          additionalProperties: false
+          properties:
+            name: { type: string, minLength: 5, maxLength: 20 }
+            description: { type: string, minLength: 20, maxLength: 120 }
+
+    ProjectResult:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/Project" }
+
+    ProjectList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Project" }

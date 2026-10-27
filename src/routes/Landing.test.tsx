@@ -4,12 +4,12 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Landing from './Landing.tsx'
 
-function renderLanding() {
+function renderLanding(google = true) {
   const fetch = vi.fn(() => new Promise<Response>(() => {}))
   vi.stubGlobal('fetch', fetch)
   render(
     <MemoryRouter>
-      <Landing />
+      <Landing google={google} />
     </MemoryRouter>,
   )
   return fetch
@@ -67,6 +67,15 @@ describe('Landing', () => {
     expect(within(features).getAllByRole('heading', { level: 3 })).toHaveLength(4)
   })
 
+  it('with Google sign-in the sign-in feature still offers Google', () => {
+    renderLanding()
+    const features = screen.getByRole('region', { name: 'Everything a personal plan needs' })
+    expect(within(features).getByRole('heading', { level: 3, name: 'Sign in your way' })).toBeTruthy()
+    expect(
+      within(features).getByText('Use your Google account or an email and password; your projects stay yours.'),
+    ).toBeTruthy()
+  })
+
   it('final call to action offers both starts again', () => {
     renderLanding()
     const final = screen.getByRole('region', { name: 'Start your first project in a minute' })
@@ -74,5 +83,35 @@ describe('Landing', () => {
     expect(within(final).getByRole('link', { name: 'Create an account with email' }).getAttribute('href')).toBe(
       '/sign-up',
     )
+  })
+})
+
+describe('Landing without Google sign-in', () => {
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  it('without Google sign-in the landing never mentions Google', () => {
+    renderLanding(false)
+    expect(document.body.textContent).not.toMatch(/google/i)
+    expect(screen.queryByRole('link', { name: /google/i })).toBeNull()
+  })
+
+  it.each([headline, 'Start your first project in a minute'])(
+    'without Google sign-in the starts in "%s" are email ones',
+    (region) => {
+      renderLanding(false)
+      const section = screen.getByRole('region', { name: region })
+      expect(within(section).getByRole('link', { name: 'Sign up' }).getAttribute('href')).toBe('/sign-up')
+      expect(within(section).getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in')
+    },
+  )
+
+  it('without Google sign-in the sign-in feature speaks of email and password only', () => {
+    renderLanding(false)
+    const features = screen.getByRole('region', { name: 'Everything a personal plan needs' })
+    expect(within(features).getAllByRole('heading', { level: 3 })).toHaveLength(4)
+    expect(within(features).getByText('Use your email and password; your projects stay yours.')).toBeTruthy()
   })
 })

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as Sentry from '@sentry/react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import App from './App.tsx'
 import type { AppConfig } from './config.ts'
@@ -13,6 +13,7 @@ const config: AppConfig = {
   GOOGLE_CLIENT_ID: '',
   OAUTH_CLIENT_ID: '',
 }
+const withGoogle: AppConfig = { ...config, GOOGLE_CLIENT_ID: 'client-id.apps.example.test' }
 
 function stubFetch(impl: () => Promise<Response>) {
   const fetch = vi.fn(impl)
@@ -61,7 +62,7 @@ describe('App', () => {
   it('unknown paths fall back to the landing page', () => {
     stubFetch(() => new Promise(() => {}))
     window.history.pushState({}, '', '/no-such-page')
-    render(<App config={config} errorTest={null} />)
+    render(<App config={withGoogle} errorTest={null} />)
     expect(screen.getByRole('link', { name: 'Continue with Google' })).toBeTruthy()
   })
 
@@ -70,9 +71,27 @@ describe('App', () => {
     ['Sign up with email and password', 'Sign up'],
   ])('the "%s" start opens the %s screen', (link, title) => {
     stubFetch(() => new Promise(() => {}))
-    render(<App config={config} errorTest={null} />)
+    render(<App config={withGoogle} errorTest={null} />)
     fireEvent.click(screen.getByRole('link', { name: link }))
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title)
+  })
+
+  it.each([
+    ['Sign up', 'Sign up'],
+    ['Sign in', 'Sign in'],
+  ])('without a Google client id the "%s" start on the landing opens the %s screen', (link, title) => {
+    stubFetch(() => new Promise(() => {}))
+    render(<App config={config} errorTest={null} />)
+    const hero = screen.getByRole('region', { name: 'Every project and every task in one calm place' })
+    fireEvent.click(within(hero).getByRole('link', { name: link }))
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title)
+  })
+
+  it('without a Google client id the landing does not mention Google', () => {
+    stubFetch(() => new Promise(() => {}))
+    render(<App config={config} errorTest={null} />)
+    expect(screen.getByRole('main').textContent).not.toMatch(/google/i)
+    expect(screen.queryByRole('link', { name: /google/i })).toBeNull()
   })
 
   it('a visitor on the landing page loads no project data', async () => {
@@ -134,7 +153,6 @@ describe('App', () => {
 
   it("Google's script is loaded on the sign-in and sign-up screens only", () => {
     stubFetch(() => new Promise(() => {}))
-    const withGoogle = { ...config, GOOGLE_CLIENT_ID: 'client-id.apps.example.test' }
     const googleScript = () => document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
 
     render(<App config={withGoogle} errorTest={null} />)

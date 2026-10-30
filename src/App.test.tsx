@@ -12,6 +12,7 @@ const config: AppConfig = {
   APP_VERSION: 'sha-abc123',
   GOOGLE_CLIENT_ID: '',
   OAUTH_CLIENT_ID: '',
+  SUPPORT_EMAIL: '',
 }
 const withGoogle: AppConfig = { ...config, GOOGLE_CLIENT_ID: 'client-id.apps.example.test' }
 
@@ -94,6 +95,24 @@ describe('App', () => {
     expect(screen.queryByRole('link', { name: /google/i })).toBeNull()
   })
 
+  it('without a Google client id a taken email on sign-up does not mention Google', async () => {
+    stubFetch(async () =>
+      Response.json(
+        { status: 'error', message: 'User could not be created', errors: ['Email has already been taken'] },
+        { status: 422 },
+      ),
+    )
+    window.history.pushState({}, '', '/sign-up')
+    render(<App config={config} errorTest={null} />)
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'taken@example.test' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret1' } })
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'secret1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign up' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Sign in instead with your password.')
+    expect(alert.textContent).not.toMatch(/google/i)
+  })
+
   it('a visitor on the landing page loads no project data', async () => {
     const fetch = stubFetch(async () => Response.json({ status: 'ok' }))
     render(<App config={config} errorTest={null} />)
@@ -110,6 +129,26 @@ describe('App', () => {
     await screen.findByText('API status: ok')
     expect(fetch).toHaveBeenCalledOnce()
     expect(fetch).toHaveBeenCalledWith('https://api.example.test/health', expect.anything())
+  })
+
+  it.each([
+    ['/privacy', 'Privacy policy'],
+    ['/terms', 'Terms of use'],
+  ])('a signed-out visitor opening %s sees that page', (path, title) => {
+    const fetch = stubFetch(async () => Response.json({ status: 'ok' }))
+    window.history.pushState({}, '', path)
+    render(<App config={{ ...config, ENV_NAME: 'prod' }} errorTest={null} />)
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('the privacy page shows the SUPPORT_EMAIL from the runtime config', () => {
+    stubFetch(() => new Promise(() => {}))
+    window.history.pushState({}, '', '/privacy')
+    render(<App config={{ ...config, SUPPORT_EMAIL: 'support@example.test' }} errorTest={null} />)
+    expect(screen.getByRole('link', { name: 'support@example.test' }).getAttribute('href')).toBe(
+      'mailto:support@example.test',
+    )
   })
 
   it('shows the status the backend reports from /health', async () => {

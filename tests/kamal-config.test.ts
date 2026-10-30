@@ -19,6 +19,7 @@ function renderKamalConfig(file: string, env: Record<string, string | undefined>
         ECR_REGISTRY: 'registry.invalid',
         GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
         OAUTH_CLIENT_ID: 'web-client-uid',
+        SUPPORT_EMAIL: 'support@example.test',
         ...env,
       },
       encoding: 'utf8',
@@ -102,6 +103,7 @@ describe('Kamal prod config', () => {
       ENV_NAME: 'prod',
       GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
       OAUTH_CLIENT_ID: 'web-client-uid',
+      SUPPORT_EMAIL: 'support@example.test',
     })
   })
 })
@@ -109,6 +111,7 @@ describe('Kamal prod config', () => {
 describe.each([
   ['GOOGLE_CLIENT_ID', 'client-id.apps.example.test'],
   ['OAUTH_CLIENT_ID', 'web-client-uid'],
+  ['SUPPORT_EMAIL', 'support@example.test'],
 ])('%s', (variable, value) => {
   it.each(['config/deploy.dev.yml', 'config/deploy.prod.yml'])(
     '%s passes the deploy environment value to the app as a public value',

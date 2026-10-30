@@ -208,6 +208,19 @@ describe('createApiClient', () => {
     expect(onSignedOut).not.toHaveBeenCalled()
   })
 
+  it('renews again on the next expiry after a refresh that failed for another reason', async () => {
+    const { client, fetch, store, onSignedOut } = setup(answer(401), answer(503), answer(401), answer(200, refreshed), answer(200))
+
+    await client.request('/api/v1/projects').catch(() => {})
+    const response = await client.request('/api/v1/projects')
+
+    expect(response.status).toBe(200)
+    expect(fetch).toHaveBeenCalledTimes(5)
+    expect(sent(fetch, 4).headers.get('Authorization')).toBe('Bearer a2')
+    expect(store.read()).toEqual({ accessToken: 'a2', refreshToken: 'r2' })
+    expect(onSignedOut).not.toHaveBeenCalled()
+  })
+
   it('keeps the tokens when the refresh is refused as an unknown client', async () => {
     const { client, store, onSignedOut } = setup(answer(401), answer(401, { error: 'invalid_client' }))
 

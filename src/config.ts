@@ -7,6 +7,8 @@ export interface AppConfig {
   GOOGLE_CLIENT_ID: string
   /** Public uid of the OAuth web application, sent as `client_id` on every token grant. */
   OAUTH_CLIENT_ID: string
+  /** Public contact address shown on the privacy and terms pages; empty shows a generic contact line. */
+  SUPPORT_EMAIL: string
 }
 
 declare global {
@@ -24,5 +26,6 @@ export function readConfig(served: Partial<AppConfig> | undefined): AppConfig {
     APP_VERSION: served?.APP_VERSION ?? 'local',
     GOOGLE_CLIENT_ID: served?.GOOGLE_CLIENT_ID ?? '',
     OAUTH_CLIENT_ID: served?.OAUTH_CLIENT_ID ?? '',
+    SUPPORT_EMAIL: served?.SUPPORT_EMAIL ?? '',
   }
 }

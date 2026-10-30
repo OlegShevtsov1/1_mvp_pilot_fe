@@ -194,3 +194,17 @@ describe('deploy/be_version_check.sh through the public backend mirror', () => {
     expect(result.stderr).toContain('Nothing was deployed.')
   })
 })
+
+describe('deploy/min-be-version', () => {
+  // v0.3.0 is the first backend release with POST /oauth/token and POST /api/v1/sign_out, which the frontend calls.
+  const floor = 'v0.3.0'
+
+  it('declares a backend that has the token endpoint and sign-out the frontend calls', () => {
+    const declared = readFileSync(join(repoRoot, 'deploy', 'min-be-version'), 'utf8').trim()
+    expect(declared).toMatch(/^v\d+\.\d+\.\d+$/)
+    expect(
+      declared.localeCompare(floor, undefined, { numeric: true }),
+      `deploy/min-be-version is ${declared}, below ${floor}`,
+    ).toBeGreaterThanOrEqual(0)
+  })
+})

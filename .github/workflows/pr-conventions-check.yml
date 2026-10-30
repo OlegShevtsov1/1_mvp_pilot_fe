@@ -4,7 +4,8 @@ name: pr-conventions-check
 # branch name, a PILOT-<n>: title and exactly one Type: line in the body, which becomes the
 # squash commit body (scripts/pr-conventions.sh). A release PR, titled PILOT-<n>: Release vX.Y.Z,
 # also carries a "## Changelog" with the [X.Y.Z] section of CHANGELOG.md (decision 64), read from
-# the checked-out merge result. Applies once the develop branch exists.
+# the checked-out merge result. A release is never titled PILOT-0 (decision 91). Applies once the
+# develop branch exists.
 on:
   pull_request:
     branches: [develop, main]

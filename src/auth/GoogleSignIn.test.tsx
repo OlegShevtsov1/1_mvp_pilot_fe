@@ -13,6 +13,7 @@ const config: AppConfig = {
   APP_VERSION: 'sha-abc123',
   GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
   OAUTH_CLIENT_ID: 'web-client',
+  SUPPORT_EMAIL: '',
 }
 const earlier = { accessToken: 'a0', refreshToken: 'r0' }
 const answer = (status: number, body: unknown = {}) => new Response(JSON.stringify(body), { status })

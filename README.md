@@ -59,6 +59,7 @@ window.APP_CONFIG = {
   SENTRY_DSN: "",
   GOOGLE_CLIENT_ID: "",
   OAUTH_CLIENT_ID: "",
+  SUPPORT_EMAIL: "",
   ENV_NAME: "dev",
   APP_VERSION: "local",
 };
@@ -89,8 +90,8 @@ covers the SDLC scripts (`tdd-check`, `main-guard`, the bundle check,
 release tooling: versions, CHANGELOG sections and checks on git fixtures, the
 release and changelog-check workflows, the tag pre-push hook, release-watch,
 the backend release-order check, `bin/sdlc-metrics`, the nginx cache
-headers and Content-Security-Policy, and the AI review workflow and its report
-script.
+headers and Content-Security-Policy, and the AI review workflow and its gate and
+submit scripts.
 
 CI also scans the full git history for secrets with
 [gitleaks](https://github.com/gitleaks/gitleaks) and lints the workflows with
@@ -153,29 +154,47 @@ default.
 
 It runs when a pull request is opened, reopened, marked ready for review,
 pushed to (`synchronize`, also the push after "changes requested") or gets a
-review request. It skips `archon/task-factory-*` heads (the factory reviews its
-own pull requests, decision R-C5), Dependabot, drafts and the release pull request
-`develop → main`.
+review request. Factory heads (`archon/task-factory-*`) are reviewed like any
+other pull request (decision 103 a, which revises R-C5); Dependabot, drafts and
+the release pull request `develop → main` are skipped.
 
 The review uses Sonnet 5.5 (`claude-sonnet-5-5`, decisions R-C12 and 59 b), at
 most 20 turns and read-only tools: the model cannot write files or post to
-GitHub. It returns its findings as structured output, and
-`scripts/ai-review-report.sh` posts them as one
-`AI review` comment (updated in place on later runs) whose third line is
-`AI-REVIEW: P0=… P1=… P2=…`, and writes `ai-review/result.json`. Red means at
-least one P0 or P1, or no summary at all (the review failed, hit its turn limit
-or the secret is missing): review is required before merge. Fix the code and
-push; the new run updates the same comment. P2 findings alone stay green. The
-factory does not merge while the check is red; making it a required check in
-branch protection is deferred to PUB.
+GitHub. It returns its findings, each with a path and a line, as structured
+output. `scripts/ai-review-report.sh` writes `ai-review/result.json` and turns
+the check red on at least one P0 or P1, or no summary at all (the review
+failed, hit its turn limit or the secret is missing): review is required before
+merge. The job log lists every P0 and P1 as `AI review P1 path:line - title`
+followed by its explanation. P2 findings
+alone stay green. The factory does not merge while the check is red; making it a
+required check in branch protection is deferred to PUB.
+
+`scripts/ai-review-submit.sh`, run from the workflow's own revision, then posts
+one pull request review per head commit as `github-actions` (sidebar
+"Reviewers", decision 103 a): `REQUEST_CHANGES` on a P0 or P1, otherwise
+`COMMENT`. It reads the head sha and the pull request diff that a "Collect the
+pull request" step writes before the review. Findings on changed lines are
+inline comments, also on paths git quotes (non-ASCII characters, quotes) and
+paths with spaces; the others are listed in the review body, each finding once,
+which keeps the `AI-REVIEW: P0=… P1=… P2=…` line. The body and every inline
+comment are capped at 60000 characters, below GitHub's limit, with a truncation
+note. A result without P0 or P1 dismisses every `REQUEST_CHANGES` of the AI
+review, that head's own included, also on a re-run of a
+head already reviewed, so a dismissal that failed once is retried. If GitHub
+rejects the inline comments, every finding goes in the body. A posting or
+dismissal failure is a warning and never changes the check. The script knows
+its own reviews by the `github-actions` login and the `<!-- ai-review -->`
+marker that starts their body, both for the dismissal and for posting nothing on
+a head it already reviewed; another workflow's review on the same token is left
+alone. Fix the code and push; the new head gets a new review.
 
 A comment containing `@claude review` by an owner, member or collaborator on
 an open pull request asks for a re-review. GitHub runs comment-triggered
 workflows from `main`, so this works once `ai-review.yml` has reached `main`
-with a release. It refreshes the comment but is not a check on the pull
+with a release. On a head that already has a review it posts nothing new (a
+clean result still dismisses as above), and it is not a check on the pull
 request head; to change the check, push or use "Re-run jobs" on the pull
-request's run. Comment re-reviews do not apply the factory, draft and release
-skips.
+request's run. Comment re-reviews do not apply the draft and release skips.
 
 Secrets (names only): `CLAUDE_CODE_OAUTH_TOKEN`, the Claude subscription token
 (decision 33 a), passed as the action input `claude_code_oauth_token`. An
@@ -223,8 +242,9 @@ requires, on every pull request into `develop` or `main`, such a branch name
 `Type: feat|fix|chore|docs|refactor|test|ci` in the body, which becomes the
 squash commit body. A pull request titled `PILOT-<n>: Release vX.Y.Z` must
 also have a `## Changelog` heading followed by the `[X.Y.Z]` section of
-`CHANGELOG.md` (decision 64; see [Cutting a release](#cutting-a-release)). The
-check reports "not applicable" until the `develop` branch exists.
+`CHANGELOG.md` (decision 64; see [Cutting a release](#cutting-a-release)), and
+a release is never titled `PILOT-0` (decision 91). The check reports "not
+applicable" until the `develop` branch exists.
 
 `tdd-check` ([`scripts/tdd-check.sh`](scripts/tdd-check.sh)) applies to a
 pull request that changes non-test files under `src/`, `bin/`, `deploy/`,
@@ -232,9 +252,10 @@ pull request that changes non-test files under `src/`, `bin/`, `deploy/`,
 must fail at that commit: the check reproduces this and records it there as
 the failing commit status `tdd-check/red`. A later `feat(...)` or `fix(...)`
 commit must follow. Tests (`tests/` and `*.test.*` files under those code
-directories) must not change between the two. It does not apply to the
-release PR `develop` → `main`, and commits already on `main` (a back-merge
-after a hotfix) are not checked again.
+directories) that the pull request's own commits change must not change
+between the two; commits merged in from the base branch never count. It does
+not apply to the release PR `develop` → `main`, and commits already on `main`
+(a back-merge after a hotfix) are not checked again.
 
 `main-guard` ([`scripts/main-guard.sh`](scripts/main-guard.sh)) runs on every
 push to `main`, and its twin `develop-guard` on every push to `develop`. A
@@ -260,9 +281,10 @@ environment:
 | Variable | `/config.js` field | Notes |
 |----------|--------------------|-------|
 | `API_URL` | `API_URL` | Required. Backend base URL, e.g. `https://dev.pilot.up.km.ua` |
-| `SENTRY_DSN` | `SENTRY_DSN` | Optional. Empty turns error reporting off |
+| `SENTRY_DSN` | `SENTRY_DSN` | Optional. The GlitchTip DSN; browsers get it on the `API_URL` origin (same key and project, events go through the backend tunnel). Empty turns error reporting off; a value that is not a DSN, or a private `API_URL` host, stops the container |
 | `GOOGLE_CLIENT_ID` | `GOOGLE_CLIENT_ID` | Optional. Public Google OAuth client id from the GitHub environment variable; empty turns Google sign-in off |
 | `OAUTH_CLIENT_ID` | `OAUTH_CLIENT_ID` | Optional. Public uid of the backend's OAuth web application from the GitHub environment variable; sent as `client_id` when the app asks for tokens |
+| `SUPPORT_EMAIL` | `SUPPORT_EMAIL` | Optional. Public contact address shown on `/privacy` and `/terms`, from the GitHub environment variable; empty shows "contact the operator of this deployment" |
 | `ENV_NAME` | `ENV_NAME` | Required. Sent as the error `environment`, e.g. `dev` |
 | `KAMAL_VERSION` | `APP_VERSION` | Set by Kamal to the deployed image tag; `local` otherwise. Sent as the error `release` |
 
@@ -513,8 +535,10 @@ it.
    fresh `## [Unreleased]` with the six headings above it.
    `scripts/release-notes.sh vX.Y.Z` prints the section.
 2. Release PR `develop → main`, titled `PILOT-<n>: Release vX.Y.Z`, merged by
-   the operator with a merge commit. Its body carries a `## Changelog` heading
-   followed by the full `[X.Y.Z]` section of `CHANGELOG.md` on `develop`;
+   the operator with a merge commit. Both PRs carry the release's own card,
+   never `PILOT-0` (`pr-conventions-check` fails it; decision 91). Its body
+   carries a `## Changelog` heading followed by the full `[X.Y.Z]` section of
+   `CHANGELOG.md` on `develop`;
    pr-conventions-check stays red until it does (blank lines and trailing
    spaces do not count, the heading may read `## Changelog (vX.Y.Z)`), and
    editing the body re-runs it. Build the body from the section itself:
@@ -639,7 +663,10 @@ therefore loads the new `index.html` and, through it, the new bundle.
 ## Checking a deployed app
 
 [Playwright](https://playwright.dev) tests in `e2e/` check a deployed app
-against its real backend. They are not part of CI.
+against its real backend. `npm run e2e` runs all of them except the journey
+and is not part of CI. The journey (`npm run e2e:journey`) runs in the
+"Dev Journey" workflow after each successful Dev Deploy and on demand. A bare
+`npx playwright test` with no `--project` runs both.
 
 - `e2e/runtime-config.spec.ts` (needs `E2E_ENV_NAME`, the environment the
   app runs as):
@@ -668,11 +695,46 @@ against its real backend. They are not part of CI.
   - it saves screenshots under `test-results/`: `landing-desktop-light`,
     `landing-desktop-dark` (1440×900), `landing-mobile-light` and
     `landing-mobile-dark` (360×780).
+- `e2e/legal.spec.ts`:
+  - `/privacy` and `/terms` show their heading, fit 360 and 768 px without
+    sideways scroll and show a visible focus ring on every control;
+  - the landing footer leads to the privacy policy;
+  - it saves screenshots under `test-results/`: `privacy-` and `terms-`
+    `desktop-light`, `desktop-dark` (1440×900), `mobile-light` and
+    `mobile-dark` (360×780).
+- `e2e/dashboard.spec.ts` stubs `/api/v1/projects` and seeds a fake token
+  pair, so it needs no account and changes nothing on the server:
+  - the dashboard fits a 360 px screen and opens its project drawer;
+  - it follows the system light and dark theme;
+  - an empty list shows the first-project invitation;
+  - the `/` shortcut focuses the search box with a visible focus ring;
+  - it does not animate when reduced motion is requested;
+  - the desktop sidebar background runs the full page height and stays in
+    view;
+  - it saves screenshots under `test-results/`: `dashboard-desktop-light`,
+    `dashboard-desktop-dark`, `dashboard-mobile-light`,
+    `dashboard-mobile-dark` and the same four with an `-empty` suffix.
+- `e2e/journey.spec.ts` (Playwright project `journey`) walks the real UI
+  against the real backend, with no stubs:
+  - landing, e-mail sign-up, the first-project and first-task guidance, a
+    first project and task, the task marked completed, and sign-out (the
+    old access token is then refused);
+  - it signs up one new account per run (`e2e-<stamp>@example.com`, with a
+    password generated at runtime) and never signs in. Sign-ups are limited
+    to 5 an hour per source IP, so a run on an exhausted IP fails with
+    `sign-up refused: Too many attempts…`; wait, do not rerun at once;
+  - it deletes its task and project before signing out, and cleans them up
+    after a failure too;
+  - the account stays behind: the contract has no user deletion. After a
+    passing run it owns no data. Removing the `e2e-*@example.com` users is a
+    backend operator task (a console delete in the backend);
+  - never point it at prod.
 
 ```bash
 npx playwright install chromium
 E2E_BASE_URL=https://app.dev.pilot.up.km.ua E2E_ENV_NAME=dev npm run e2e
 E2E_BASE_URL=https://app.dev.pilot.up.km.ua E2E_MARKER_PREFIX=check-1 npx playwright test e2e/error-tunnel.spec.ts
+E2E_BASE_URL=https://app.dev.pilot.up.km.ua npm run e2e:journey
 
 # prod smoke
 E2E_BASE_URL=https://app.pilot.up.km.ua E2E_ENV_NAME=prod npx playwright test e2e/runtime-config.spec.ts e2e/api.spec.ts

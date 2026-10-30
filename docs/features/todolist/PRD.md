@@ -7,7 +7,7 @@ feature_size: "M"
 stage: "03"
 ticket: "Trello #222 (card 6ad9e7a3497aff024e1928c0)"
 ---
-<!-- Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/PRD.md by sync-spec. Do not edit here. -->
+<!-- Copied from be@e189f0f581b7fb19b3d94dd70de5e0d2b9d57633:docs/features/todolist/PRD.md by sync-spec. Do not edit here. -->
 
 # PRD — todolist
 

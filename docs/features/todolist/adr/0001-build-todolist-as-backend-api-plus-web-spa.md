@@ -7,7 +7,7 @@ feature_size: M
 stage: "04-05"
 ticket: "PILOT-222"
 ---
-<!-- Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/adr/0001-build-todolist-as-backend-api-plus-web-spa.md by sync-spec. Do not edit here. -->
+<!-- Copied from be@e189f0f581b7fb19b3d94dd70de5e0d2b9d57633:docs/features/todolist/adr/0001-build-todolist-as-backend-api-plus-web-spa.md by sync-spec. Do not edit here. -->
 
 # 0001 — Build todolist as a backend API plus a web SPA
 

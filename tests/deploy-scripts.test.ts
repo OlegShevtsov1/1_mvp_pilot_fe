@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { calls, fakeCommand, fakeCrane, projectEnv, registryDigest, runScript, seedImage, tempDir, writeMirrorSource } from './support.ts'
+import { calls, fakeCommand, fakeCrane, projectEnv, registryDigest, repoRoot, runScript, seedImage, tempDir, writeMirrorSource } from './support.ts'
 
 const { PROJECT_NAME: name, PROJECT_ZONE: zone } = projectEnv()
 const sha = 'a'.repeat(40)
@@ -11,6 +11,7 @@ const appUrl = `https://app.dev.${zone}`
 const prodUrl = `https://app.${zone}`
 const tag = 'v0.1.0'
 const beSha = '7'.repeat(40)
+const minBeVersion = readFileSync(join(repoRoot, 'deploy', 'min-be-version'), 'utf8').trim()
 const devLayers = ['sha256:layer-1', 'sha256:layer-2']
 
 let bin: string
@@ -366,7 +367,7 @@ esac`,
       beforeEach(() => {
         mirrorSource = join(bin, 'MIRROR_SOURCE.json')
         writeMirrorSource(mirrorSource, [{ tag, primary_sha: source, mirror_sha: mirrorSha }])
-        writeMirrorSource(join(bin, 'be-mirror-source.json'), [{ tag: 'v0.1.0', primary_sha: beSha }])
+        writeMirrorSource(join(bin, 'be-mirror-source.json'), [{ tag: minBeVersion, primary_sha: beSha }])
         seedImage(bin, `sha-${source}`, { layers: devLayers, service: `${name}-fe-dev` })
         fakeGh({ tagSha: mirrorSha })
         fakeCommand(
@@ -392,7 +393,7 @@ esac`,
         expect(calls(bin, 'kamal')).toEqual([`deploy -d prod --skip-push --version ${sourceVersion}`])
         expect(calls(bin, 'crane').join('\n')).not.toContain(mirrorSha)
         expect(registryDigest(bin, 'prod-current')).toBe(registryDigest(bin, sourceVersion))
-        expect(result.stdout).toContain(`backend on prod ${beSha.slice(0, 7)} is v0.1.0`)
+        expect(result.stdout).toContain(`backend on prod ${beSha.slice(0, 7)} is ${minBeVersion}`)
         expectNoLeaks(result)
       })
 

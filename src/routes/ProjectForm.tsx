@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useState } from 'react'
 import { type ProjectInput, type SaveErrors, type SaveResult, validateProject } from '../api/projects.ts'
 import './AuthForm.css'
 import TextField from './TextField.tsx'
@@ -12,6 +12,8 @@ interface ProjectFormProps<T> {
   onSaved: (saved: T) => void
   validate?: (input: ProjectInput) => SaveErrors
   onCancel?: () => void
+  autoFocus?: boolean
+  className?: string
 }
 
 const empty: ProjectInput = { name: '', description: '' }
@@ -28,6 +30,8 @@ function ProjectForm<T>({
   save,
   onSaved,
   onCancel,
+  autoFocus = false,
+  className,
   validate = validateProject,
 }: ProjectFormProps<T>) {
   const [input, setInput] = useState<ProjectInput>(initial)
@@ -54,15 +58,20 @@ function ProjectForm<T>({
     }
   }
 
+  const cancelOnEscape = (event: KeyboardEvent<HTMLFormElement>) => {
+    if (event.key === 'Escape') onCancel?.()
+  }
+
   return (
-    <form className="auth-form" aria-label={label} noValidate onSubmit={submit}>
-      {fields.map(({ field, label }) => (
+    <form className={className ? `auth-form ${className}` : 'auth-form'} aria-label={label} noValidate onSubmit={submit} onKeyDown={cancelOnEscape}>
+      {fields.map(({ field, label }, index) => (
         <TextField
           key={field}
           id={`${idPrefix}-${field}`}
           label={label}
           type="text"
           autoComplete="off"
+          autoFocus={autoFocus && index === 0}
           value={input[field]}
           error={errors[field]}
           onChange={(value) => setInput((current) => ({ ...current, [field]: value }))}
@@ -73,11 +82,11 @@ function ProjectForm<T>({
           Something went wrong. Try again.
         </p>
       )}
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="button button-primary" disabled={pending}>
         {submitLabel}
       </button>
       {onCancel && (
-        <button type="button" onClick={onCancel}>
+        <button type="button" className="button" onClick={onCancel}>
           Cancel
         </button>
       )}

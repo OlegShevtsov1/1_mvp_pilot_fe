@@ -1,20 +1,33 @@
 :root {
   color-scheme: light dark;
 
-  --color-bg: #f7f8fa;
+  --color-bg: #fafafb;
   --color-surface: #ffffff;
-  --color-text: #16181d;
-  --color-text-muted: #555b66;
-  --color-accent: #4f46e5;
-  --color-accent-strong: #4338ca;
-  --color-accent-soft: #eef0ff;
+  --color-surface-muted: #f3f5f8;
+  --color-text: #262626;
+  --color-text-muted: #595959;
+  --color-accent: #1456c8;
+  --color-accent-strong: #0f43a0;
+  --color-accent-soft: #e8f0fe;
   --color-on-accent: #ffffff;
-  --color-border: #d9dce3;
-  --color-error: #b42318;
-  --color-focus: #4f46e5;
-  --color-status-progress: #b45309;
-  --color-status-done: #15803d;
-  --gradient-glow: radial-gradient(60rem 30rem at 50% -10%, rgb(79 70 229 / 14%), transparent 70%);
+  --color-border: #e3e8ef;
+  --color-border-strong: #7b8494;
+  --color-error: #c2271b;
+  --color-error-soft: #fff1f0;
+  --color-focus: #1456c8;
+  --color-status-progress: #a15c00;
+  --color-status-done: #2a7d0c;
+  --color-status-progress-soft: #f7f0e8;
+  --color-status-done-soft: #ebf3e9;
+  --color-scrim: rgb(0 0 0 / 45%);
+  --gradient-glow: radial-gradient(60rem 30rem at 50% -10%, rgb(22 119 255 / 12%), transparent 70%);
+  --gradient-hero: var(--gradient-glow);
+  --gradient-accent: linear-gradient(180deg, var(--color-accent), var(--color-accent-strong));
+  --gradient-title: linear-gradient(180deg, var(--color-text) 30%, var(--color-accent-strong));
+  --gradient-orb: radial-gradient(50% 50% at 30% 25%, var(--color-surface) 0%, var(--color-accent-soft) 12%,
+    var(--color-accent) 40%, var(--color-bg) 78%);
+  --gradient-grid: linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -22,56 +35,107 @@
   --space-4: 1.5rem;
   --space-5: 2.5rem;
   --space-6: 4rem;
+  --space-7: 6rem;
 
-  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
-    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-family-base: 'Public Sans Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   --font-family-display: 'Space Grotesk Variable', var(--font-family-base);
+  --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-md: 1rem;
   --font-size-lg: 1.25rem;
   --font-size-xl: 2rem;
   --font-size-2xl: clamp(2.25rem, 1.5rem + 3vw, 3.5rem);
   --font-size-3xl: clamp(2.5rem, 1.5rem + 4.5vw, 4.5rem);
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
   --font-weight-bold: 700;
   --line-height-base: 1.5;
   --line-height-tight: 1.15;
 
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
-  --radius-lg: 1rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1.25rem;
   --radius-pill: 999px;
   --border-width: 1px;
   --content-width: 40rem;
+  --content-width-max: 1200px;
+  --sidebar-width: 17.5rem;
+  --topbar-height: 4rem;
 
-  --shadow-sm: 0 1px 2px rgb(31 35 40 / 8%);
-  --shadow-md: 0 4px 12px rgb(31 35 40 / 10%);
-  --shadow-lg: 0 12px 32px rgb(31 35 40 / 14%);
-  --shadow-glow: 0 0 0 1px rgb(79 70 229 / 20%), 0 8px 32px rgb(79 70 229 / 18%);
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 6%);
+  --shadow-md: 0 4px 12px rgb(16 24 40 / 8%);
+  --shadow-lg: 0 12px 32px rgb(16 24 40 / 12%);
+  --shadow-glow: 0 0 0 1px rgb(22 119 255 / 20%), 0 8px 32px rgb(22 119 255 / 16%);
 
+  --duration-fast: 120ms;
   --duration-base: 200ms;
+  --duration-slow: 320ms;
   --easing-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #08090c;
-    --color-surface: #12141a;
-    --color-text: #eef0f4;
-    --color-text-muted: #9ba1ad;
-    --color-accent: #8b8dff;
-    --color-accent-strong: #a9abff;
-    --color-accent-soft: #1c1d3a;
-    --color-on-accent: #0b0b1a;
-    --color-border: #262a33;
-    --color-error: #ff8a80;
-    --color-focus: #a9abff;
-    --color-status-progress: #f5b544;
-    --color-status-done: #4cc38a;
-    --gradient-glow: radial-gradient(60rem 30rem at 50% -10%, rgb(139 141 255 / 22%), transparent 70%);
+    --color-bg: #111317;
+    --color-surface: #1a1d23;
+    --color-surface-muted: #22262e;
+    --color-text: #eceef2;
+    --color-text-muted: #a3a9b5;
+    --color-accent: #6ea8ff;
+    --color-accent-strong: #93bcff;
+    --color-accent-soft: #14233d;
+    --color-on-accent: #06142b;
+    --color-border: #2b3038;
+    --color-border-strong: #7c8594;
+    --color-error: #ff8c82;
+    --color-error-soft: #3a1614;
+    --color-focus: #93bcff;
+    --color-status-progress: #f0b45a;
+    --color-status-done: #52c98b;
+    --color-status-progress-soft: #342f2a;
+    --color-status-done-soft: #21322f;
+    --color-scrim: rgb(0 0 0 / 55%);
+    --gradient-glow: radial-gradient(60rem 30rem at 50% -10%, rgb(110 168 255 / 22%), transparent 70%);
 
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
     --shadow-md: 0 4px 12px rgb(0 0 0 / 40%);
     --shadow-lg: 0 12px 32px rgb(0 0 0 / 50%);
-    --shadow-glow: 0 0 0 1px rgb(139 141 255 / 25%), 0 8px 40px rgb(139 141 255 / 22%);
+    --shadow-glow: 0 0 0 1px rgb(110 168 255 / 25%), 0 8px 40px rgb(110 168 255 / 22%);
   }
+}
+
+/* The landing page's palette (ADR-0005): always dark, the same role names, set on the landing root element. */
+.palette-landing {
+  color-scheme: dark;
+
+  --color-bg: #07060b;
+  --color-surface: #100e18;
+  --color-surface-muted: #18152a;
+  --color-text: #f3f1fa;
+  --color-text-muted: #aaa4bd;
+  --color-accent: #7c3aed;
+  --color-accent-strong: #b195ff;
+  --color-accent-soft: #1d1533;
+  --color-on-accent: #ffffff;
+  --color-border: #262236;
+  --color-border-strong: #6f6787;
+  --color-error: #ff8c82;
+  --color-error-soft: #3a1614;
+  --color-focus: #c4a8ff;
+  --color-status-progress: #f0b45a;
+  --color-status-done: #52c98b;
+  --color-status-progress-soft: #3b2e32;
+  --color-status-done-soft: #21323a;
+  --gradient-hero: radial-gradient(70% 55% at 50% 0%, rgb(124 58 237 / 38%), transparent 70%);
+  --gradient-glow: var(--gradient-hero);
+  --gradient-accent: linear-gradient(180deg, #8b50f5, #7c3aed);
+  --gradient-title: linear-gradient(180deg, #ffffff 30%, #b195ff);
+  --gradient-orb: radial-gradient(50% 50% at 30% 25%, #ffffff 0%, #c4a8ff 12%, #7c3aed 40%, #1d1533 78%);
+  --gradient-grid: linear-gradient(rgb(255 255 255 / 5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 5%) 1px, transparent 1px);
+
+  --shadow-lg: 0 24px 60px rgb(0 0 0 / 60%);
+  --shadow-glow: 0 0 0 1px rgb(177 149 255 / 25%), 0 10px 40px rgb(124 58 237 / 35%);
 }

@@ -247,6 +247,30 @@ describe('scripts/pr-conventions.sh', () => {
       expect(lines[1]).toContain("'## Changelog' heading")
     })
 
+    // Every release has its own card; PILOT-0 is only for card-less chores (decision 91). The body
+    // carries the [1.2.0] section, so the card is the only rule the release title breaks.
+    const complete = `## Changelog\n\n${section}\n\nType: chore\n`
+
+    it.each([
+      ['PILOT-0: Release v1.2.0', 'develop', 'main'],
+      ['PILOT-0: Release 1.2.0 changelog', 'archon/task-factory-1792086449826', 'develop'],
+      ['PILOT-00: Release v1.2.0', 'develop', 'main'],
+    ])('rejects the card-less release title %j from %s into %s', (title, head, base) => {
+      const result = checkRelease({ PR_TITLE: title, HEAD_REF: head, BASE_REF: base, PR_BODY: complete })
+      expect(result.status).toBe(1)
+      expect(errors(result.stdout)).toHaveLength(1)
+      expect(result.stdout).toContain('decision 91')
+      expect(result.stdout).toContain('PILOT-<n>: Release vX.Y.Z')
+    })
+
+    it.each(['PILOT-0: Sync main (abc1234)', 'PILOT-12: Release v1.2.0'])(
+      'accepts the title %j from develop into main',
+      (title) => {
+        const result = checkRelease({ PR_TITLE: title, PR_BODY: complete })
+        expect(result.status, result.stdout + result.stderr).toBe(0)
+      },
+    )
+
     it.each([
       ['PILOT-171: Release 0.2.0 changelog', 'develop'],
       ['PILOT-7: Release v1.2.0 notes', 'main'],

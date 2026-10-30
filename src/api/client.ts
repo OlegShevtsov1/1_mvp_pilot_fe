@@ -56,8 +56,9 @@ export function requestToken(apiUrl: string, body: TokenRequest, fetch: typeof g
 
 export function createApiClient({ apiUrl, clientId, store, onSignedOut, fetch = globalThis.fetch }: ApiClientOptions): ApiClient {
   // Refresh tokens rotate: every renewal of one refresh token, sign-out's included, shares one exchange, or the later
-  // ones would present a revoked token and be refused.
-  let exchanging: { refreshToken: string; next: Promise<TokenPair | null> } | null = null
+  // ones would present a revoked token and be refused. The answer is kept until another token is renewed, so a renewal
+  // that comes after the exchange settled gets it too; only a failed exchange is forgotten, to be tried again.
+  let lastRenewal: { refreshToken: string; next: Promise<TokenPair | null> } | null = null
   // Requests that expire together share one refresh, so a refused one signs the device out once.
   let refreshing: Promise<TokenPair> | null = null
 
@@ -85,13 +86,14 @@ export function createApiClient({ apiUrl, clientId, store, onSignedOut, fetch = 
   }
 
   function renewalOf(pair: TokenPair): Promise<TokenPair | null> {
-    if (exchanging?.refreshToken !== pair.refreshToken) {
-      const next = exchange(pair).finally(() => {
-        if (exchanging?.next === next) exchanging = null
+    if (lastRenewal?.refreshToken !== pair.refreshToken) {
+      const next = exchange(pair)
+      next.catch(() => {
+        if (lastRenewal?.next === next) lastRenewal = null
       })
-      exchanging = { refreshToken: pair.refreshToken, next }
+      lastRenewal = { refreshToken: pair.refreshToken, next }
     }
-    return exchanging.next
+    return lastRenewal.next
   }
 
   async function refresh(pair: TokenPair): Promise<TokenPair> {

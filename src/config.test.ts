@@ -10,6 +10,7 @@ describe('readConfig', () => {
       APP_VERSION: 'sha-abc123',
       GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
       OAUTH_CLIENT_ID: 'web-client-uid',
+      SUPPORT_EMAIL: 'support@example.test',
     }
     expect(readConfig(served)).toEqual(served)
   })
@@ -22,6 +23,7 @@ describe('readConfig', () => {
       APP_VERSION: 'local',
       GOOGLE_CLIENT_ID: '',
       OAUTH_CLIENT_ID: '',
+      SUPPORT_EMAIL: '',
     }
     expect(readConfig(undefined)).toEqual(defaults)
     expect(readConfig({ ENV_NAME: 'dev' })).toEqual({ ...defaults, ENV_NAME: 'dev' })

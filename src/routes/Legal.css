@@ -1,0 +1,42 @@
+.legal-text {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--space-5) 0;
+  text-align: left;
+}
+
+.landing .legal-text h1 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-xl);
+}
+
+.landing .legal-text h2 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--font-size-lg);
+}
+
+.legal-text p,
+.legal-text li {
+  color: var(--color-text-muted);
+}
+
+.legal-text ul {
+  padding-left: var(--space-4);
+}
+
+.legal-text li + li {
+  margin-top: var(--space-2);
+}
+
+.legal-date {
+  font-size: var(--font-size-sm);
+}
+
+.legal-text a {
+  color: var(--color-accent-strong);
+}
+
+.legal-text a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}

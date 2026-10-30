@@ -1,0 +1,512 @@
+{
+  "copied_from": "Copied from be@5663ab6a7e9aeaf70237a282dabec48f2c6b1ca4:docs/features/redesign/tasks/tasks.json (this repository's tasks only) by sync-spec. Do not edit here. Task status and tracker.md live in be.",
+  "slug": "redesign",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Add the stylesheet guard for design values and motion, starting with App.css",
+      "type": "test",
+      "layer": "tests",
+      "deps": [],
+      "acs": [
+        "AC-14",
+        "AC-15"
+      ],
+      "dod": [
+        "`tests/stylesheets.test.ts` fails first (RED commit) because the scanner and the real `App.css` scan fail, then passes (GREEN commit)",
+        "Fixture tests show each rule failing on a bad sample and passing on a good one; a failure message names the file, the selector and the declaration",
+        "`npm test`, lint and typecheck clean; no new dependency in `package.json`"
+      ],
+      "files_hint": [
+        "tests/stylesheets.test.ts",
+        "src/App.css"
+      ],
+      "estimate": "S",
+      "owner": "OlegShevtsov1",
+      "status": "done",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae23429c3f3b2511cf1036f",
+      "trello_card_id_short": 377
+    },
+    {
+      "id": "T2",
+      "title": "Rewrite the design token values in place from the Mantis palette and type scale, both themes",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T1"
+      ],
+      "acs": [
+        "AC-12",
+        "AC-15"
+      ],
+      "dod": [
+        "The contrast test (RED first: new pairs and updated names) passes for every new pair in the light and the dark theme",
+        "Every screen still renders and the existing unit and end-to-end suites pass unchanged apart from the listed visual-value assertions (AC-12)",
+        "`tests/stylesheets.test.ts` stays green; no raw colour outside `tokens.css`",
+        "PR description lists each updated visual-value assertion, with before-and-after screenshots of all five screens at 360 px and 1440 px, light and dark"
+      ],
+      "files_hint": [
+        "src/styles/tokens.css",
+        "tests/design-tokens.test.ts",
+        "e2e/landing.spec.ts"
+      ],
+      "estimate": "M",
+      "owner": "OlegShevtsov1",
+      "status": "done",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae23429890b01c9be915793",
+      "trello_card_id_short": 378
+    },
+    {
+      "id": "T3",
+      "title": "Add base.css (page shell, header, controls, focus ring, alerts) and the shared BrandMark",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T2"
+      ],
+      "acs": [
+        "AC-13",
+        "AC-14",
+        "AC-15",
+        "AC-16"
+      ],
+      "dod": [
+        "`tests/stylesheets.test.ts` with `base.css` guarded fails first, then passes",
+        "All five screens still render with the same words and behaviour; existing suites pass unchanged (QG-1)",
+        "Landing page still passes its focus and reduced-motion end-to-end checks with the rules now in `base.css`",
+        "PR description: file list shows 0 font or image files; screenshots of all five screens, since a base rule applies everywhere at once"
+      ],
+      "files_hint": [
+        "src/styles/base.css",
+        "src/index.css",
+        "src/main.tsx",
+        "src/routes/BrandMark.tsx",
+        "src/routes/Landing.tsx",
+        "src/routes/Landing.css",
+        "tests/stylesheets.test.ts"
+      ],
+      "estimate": "M",
+      "owner": "OlegShevtsov1",
+      "status": "done",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae2342a97201482d22647f9",
+      "trello_card_id_short": 379
+    },
+    {
+      "id": "T4",
+      "title": "Add the end-to-end visual-check helpers: width, theme, focus, reduced motion, third-party requests and cabinet stubs",
+      "type": "test",
+      "layer": "tests",
+      "deps": [],
+      "acs": [
+        "AC-11",
+        "AC-12",
+        "AC-13",
+        "AC-14",
+        "AC-16"
+      ],
+      "dod": [
+        "Helpers fail first (RED commit), then the helper spec passes against the landing page at `E2E_BASE_URL`",
+        "Each helper can be reused by a screen spec with one call; the stubs reuse the app's existing contract types, no new fixture format",
+        "`npm run e2e` and lint clean; no new dependency"
+      ],
+      "files_hint": [
+        "e2e/support/"
+      ],
+      "estimate": "M",
+      "owner": "OlegShevtsov1",
+      "status": "done",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae2342b0c880d5fb11d7108",
+      "trello_card_id_short": 380
+    },
+    {
+      "id": "T12",
+      "title": "Self-host Public Sans as the body face",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T3"
+      ],
+      "acs": [
+        "AC-12",
+        "AC-15"
+      ],
+      "dod": [
+        "`tests/design-tokens.test.ts` fails first (RED commit) on the missing package, import and token value, then passes",
+        "The only new dependency is `@fontsource-variable/public-sans`; the PR names it with its version and \"SIL Open Font License 1.1\"",
+        "The T4 request check passes on the landing page with Google configured and unconfigured: no font request leaves the app's origin",
+        "Screenshots of the five screens at 1440 px, since every screen's body text changes"
+      ],
+      "files_hint": [
+        "package.json",
+        "package-lock.json",
+        "src/main.tsx",
+        "src/styles/tokens.css",
+        "tests/design-tokens.test.ts"
+      ],
+      "estimate": "S",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae3412a114f441f2d3911f7",
+      "trello_card_id_short": 439
+    },
+    {
+      "id": "T13",
+      "title": "Add the landing palette block, the gradient tokens and the new role tokens with their contrast pairs",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T12"
+      ],
+      "acs": [
+        "AC-12",
+        "AC-15"
+      ],
+      "dod": [
+        "The contrast test fails first (RED commit) on the missing block and pairs, then passes for every pair in every palette and theme it applies to",
+        "Every new role is defined at least on `:root`; the hook class is the only selector apart from `:root` that defines a design value",
+        "`tests/stylesheets.test.ts`, lint and typecheck stay green; no screen changes visually (all existing suites pass unchanged)"
+      ],
+      "files_hint": [
+        "src/styles/tokens.css",
+        "tests/design-tokens.test.ts"
+      ],
+      "estimate": "M",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae3412b501af9b2f5db8627",
+      "trello_card_id_short": 440
+    },
+    {
+      "id": "T14",
+      "title": "Landing page, part 1: always-dark palette hook, header and the hero with the decorative preview",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T4",
+        "T13"
+      ],
+      "acs": [
+        "AC-01",
+        "AC-02",
+        "AC-11",
+        "AC-12",
+        "AC-13",
+        "AC-14",
+        "AC-16"
+      ],
+      "dod": [
+        "`Landing.css` guarded: RED first, then green with 0 raw values and 0 unguarded motion",
+        "Landing e2e: dark background under both emulations, width at 360, 768 and 1440 px, focus, reduced motion, and no third-party font or image request with Google configured and unconfigured",
+        "`Landing.test.tsx` behaviour assertions pass unchanged (AC-01, AC-02: both starts lead only to sign-up and sign-in, no Google mention without a client); each changed assertion is listed in the PR",
+        "Screenshots of the landing page at 360 and 1440 px under light and dark emulation, and of `/privacy`, attached"
+      ],
+      "files_hint": [
+        "src/routes/Landing.tsx",
+        "src/routes/Landing.css",
+        "src/routes/Landing.test.tsx",
+        "src/routes/Legal.tsx",
+        "src/routes/SiteChrome.tsx",
+        "src/routes/SiteChrome.css",
+        "e2e/landing.spec.ts",
+        "tests/stylesheets.test.ts"
+      ],
+      "estimate": "L",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae3412cd0b1da4ad3d30b1c",
+      "trello_card_id_short": 441
+    },
+    {
+      "id": "T15",
+      "title": "Landing page, part 2: feature cards, \"How it works\" steps, the final call-to-action card and the footer",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T14"
+      ],
+      "acs": [
+        "AC-01",
+        "AC-02",
+        "AC-11",
+        "AC-13",
+        "AC-14",
+        "AC-16"
+      ],
+      "dod": [
+        "The new text and section assertions fail first (RED commit), then pass; existing behaviour assertions pass unchanged",
+        "Landing e2e width, focus, reduced-motion and request checks stay green with the new sections",
+        "Screenshots of the whole landing page at 360 and 1440 px (dark under both emulations) attached; the owner approves the landing page on this PR"
+      ],
+      "files_hint": [
+        "src/routes/Landing.tsx",
+        "src/routes/Landing.css",
+        "src/routes/Landing.test.tsx",
+        "src/routes/SiteChrome.tsx",
+        "src/routes/SiteChrome.css",
+        "e2e/landing.spec.ts"
+      ],
+      "estimate": "M",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae3412d02b8f61e0e04e8b4",
+      "trello_card_id_short": 442
+    },
+    {
+      "id": "T16",
+      "title": "Sign-up in the Mantis auth layout: brand, centred card with the switch link in its head, divider and fields",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T4",
+        "T12"
+      ],
+      "acs": [
+        "AC-03",
+        "AC-04",
+        "AC-11",
+        "AC-12",
+        "AC-13",
+        "AC-14",
+        "AC-15",
+        "AC-16"
+      ],
+      "dod": [
+        "`AuthForm.css` guarded: RED first, then green",
+        "`SignUp.test.tsx` passes with behaviour assertions unchanged: each faulty field shows its message (AC-04), a valid submit reaches the cabinet (AC-03); changed assertions listed",
+        "Sign-up e2e width, theme, focus, reduced-motion and request checks pass",
+        "Screenshots at 360 and 1440 px, light and dark, of the screen, its field errors and the cabinet's new-project form (it shares `AuthForm.css`); owner approval requested on the PR"
+      ],
+      "files_hint": [
+        "src/routes/SignUp.tsx",
+        "src/routes/SignUp.test.tsx",
+        "src/routes/AuthForm.css",
+        "src/routes/TextField.tsx",
+        "src/styles/base.css",
+        "e2e/signup.spec.ts",
+        "tests/stylesheets.test.ts"
+      ],
+      "estimate": "M",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae3412ee4321f9878fae393",
+      "trello_card_id_short": 443
+    },
+    {
+      "id": "T17",
+      "title": "Sign-in in the Mantis auth layout with the wrong-credentials alert",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T16"
+      ],
+      "acs": [
+        "AC-05",
+        "AC-06",
+        "AC-11",
+        "AC-12",
+        "AC-13",
+        "AC-14",
+        "AC-15",
+        "AC-16"
+      ],
+      "dod": [
+        "`SignIn.test.tsx` passes with behaviour assertions unchanged: the wrong-credentials message shows and the visitor stays (AC-06), correct credentials reach the cabinet (AC-05)",
+        "Sign-in e2e width, theme, focus, reduced-motion and request checks pass",
+        "Screenshots including the wrong-credentials state at 360 and 1440 px, light and dark; owner approval requested on the PR"
+      ],
+      "files_hint": [
+        "src/routes/SignIn.tsx",
+        "src/routes/SignIn.test.tsx",
+        "src/routes/AuthForm.css",
+        "e2e/signin.spec.ts"
+      ],
+      "estimate": "S",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae3412f977dec805311f945",
+      "trello_card_id_short": 444
+    },
+    {
+      "id": "T18",
+      "title": "Cabinet, part 1: Mantis shell with the 280 px sidebar, the top bar with the search and the phone drawer",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T4",
+        "T13"
+      ],
+      "acs": [
+        "AC-07",
+        "AC-09",
+        "AC-11",
+        "AC-12",
+        "AC-13",
+        "AC-14",
+        "AC-15",
+        "AC-16"
+      ],
+      "dod": [
+        "`Dashboard.css` guarded: RED first, then green",
+        "`Dashboard.test.tsx` behaviour assertions pass unchanged (AC-07: every action keeps its result; AC-09: a visitor without tokens is sent to sign-in); changed assertions listed",
+        "Cabinet e2e: drawer opens and closes from the one toggle at 360 px, no overflow at 360, 768 and 1440 px, both themes, focus and reduced motion",
+        "Screenshots of the shell with the drawer closed and open at 360 px and at 1440 px, light and dark"
+      ],
+      "files_hint": [
+        "src/routes/Dashboard.tsx",
+        "src/routes/Dashboard.css",
+        "src/routes/Dashboard.test.tsx",
+        "e2e/dashboard.spec.ts",
+        "tests/stylesheets.test.ts"
+      ],
+      "estimate": "L",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae34130b0989da0dc7f239d",
+      "trello_card_id_short": 445
+    },
+    {
+      "id": "T19",
+      "title": "Cabinet, part 2: filter card, project cards with status chips, and every state (loading, empty, first task, no match, failure, delete refused)",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T17",
+        "T18"
+      ],
+      "acs": [
+        "AC-07",
+        "AC-08",
+        "AC-10",
+        "AC-11",
+        "AC-12",
+        "AC-13",
+        "AC-14",
+        "AC-16"
+      ],
+      "dod": [
+        "`Dashboard.test.tsx` passes with behaviour assertions unchanged: create, rename, delete an empty project, add task, change status, filter and sign out keep their results (AC-07); a project with tasks is kept with its readable explanation (AC-08); failure, loading, empty and first-task states render (AC-10)",
+        "Cabinet e2e for every stubbed state passes width, theme, focus and reduced-motion checks",
+        "Screenshots of the states PRD §6 lists (loading, empty list, first-task guidance, filtered, load failure, delete refused) at 360 and 1440 px, light and dark; the owner approves the cabinet on this PR"
+      ],
+      "files_hint": [
+        "src/routes/Dashboard.tsx",
+        "src/routes/Dashboard.css",
+        "src/routes/Dashboard.test.tsx",
+        "src/routes/ProjectForm.tsx",
+        "src/routes/AuthForm.css",
+        "e2e/dashboard.spec.ts"
+      ],
+      "estimate": "L",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae34131be2209c295d4f938",
+      "trello_card_id_short": 446
+    },
+    {
+      "id": "T20",
+      "title": "Crash screen with the brand, a drawn illustration and the message in the display face",
+      "type": "feat",
+      "layer": "ui",
+      "deps": [
+        "T4",
+        "T12"
+      ],
+      "acs": [
+        "AC-10",
+        "AC-11",
+        "AC-12",
+        "AC-14",
+        "AC-15"
+      ],
+      "dod": [
+        "`ErrorFallback.test.tsx` fails first, then passes; the alert's accessible text is the same as before for both variants",
+        "Crash-screen e2e passes in light and dark, at 360 and 1440 px and under reduced motion",
+        "One screenshot of each variant attached; owner approval requested on the PR"
+      ],
+      "files_hint": [
+        "src/ErrorFallback.tsx",
+        "src/ErrorFallback.test.tsx",
+        "src/styles/base.css",
+        "e2e/crash-screen.spec.ts"
+      ],
+      "estimate": "S",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae34132708b2a34ff5e32db",
+      "trello_card_id_short": 447
+    },
+    {
+      "id": "T10",
+      "title": "Guard every stylesheet and check the brand mark and widths across all screens",
+      "type": "test",
+      "layer": "tests",
+      "deps": [
+        "T15",
+        "T17",
+        "T19",
+        "T20"
+      ],
+      "acs": [
+        "AC-11",
+        "AC-12",
+        "AC-14",
+        "AC-15",
+        "AC-16"
+      ],
+      "dod": [
+        "The all-stylesheets scan is green on `develop` with every screen merged, and a deliberately added raw colour in a scratch stylesheet makes it fail (checked locally, not committed)",
+        "Sweep spec green on 4 of 4 screens plus the crash screen at 360 px, 768 px and 1440 px: the same brand mark on each, the landing page dark under both emulations, the other screens in the device theme, and no font or image request leaving the app's origin",
+        "`npm test`, `npm run e2e`, lint and typecheck clean"
+      ],
+      "files_hint": [
+        "tests/stylesheets.test.ts",
+        "e2e/redesign-sweep.spec.ts"
+      ],
+      "estimate": "S",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae234305a54b630cd4c5147",
+      "trello_card_id_short": 386
+    },
+    {
+      "id": "T11",
+      "title": "Refresh the frontend architecture map and record the screen approvals",
+      "type": "docs",
+      "layer": "docs",
+      "deps": [
+        "T10"
+      ],
+      "acs": [
+        "AC-15"
+      ],
+      "dod": [
+        "`docs/architecture-map.md` in the frontend names `src/styles/base.css`, `src/routes/BrandMark.tsx`, the `.palette-landing` block, Public Sans and `tests/stylesheets.test.ts`, and its `reflects_commit` is current",
+        "Every screen's approval is linked from the feature's tracker"
+      ],
+      "files_hint": [
+        "docs/architecture-map.md",
+        "docs/features/redesign/"
+      ],
+      "estimate": "S",
+      "owner": "OlegShevtsov1",
+      "status": "todo",
+      "repo": "1_mvp_pilot_fe",
+      "trello_card_id": "6ae234311a6afef40e0bb740",
+      "trello_card_id_short": 387
+    }
+  ]
+}

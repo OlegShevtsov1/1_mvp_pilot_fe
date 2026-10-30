@@ -2,15 +2,17 @@ import { type FormEvent, type ReactNode, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { type FieldErrors, type SignUpInput, interruptionMessage, signUp, validateSignUp } from '../auth/credentials.ts'
 import type { TokenStore } from '../auth/tokenStore.ts'
-import './AuthForm.css'
-import './Landing.css'
+import { AuthAlert, AuthLayout } from './AuthLayout.tsx'
 import TextField from './TextField.tsx'
 import { paths } from './paths.ts'
 
 interface SignUpProps {
   apiUrl: string
   store: TokenStore
-  /** Google's sign-in button; App passes it so only these screens load Google's script. */
+  /**
+   * Google's sign-in button; App passes it so only these screens load Google's script, and only when Google
+   * sign-in is offered, so its presence also decides whether the taken-email message mentions Google.
+   */
   google?: ReactNode
 }
 
@@ -19,6 +21,7 @@ function SignUp({ apiUrl, store, google }: SignUpProps) {
   const [input, setInput] = useState<SignUpInput>({ email: '', password: '', confirmation: '' })
   const [errors, setErrors] = useState<FieldErrors>({})
   const [alert, setAlert] = useState<ReactNode>(null)
+  const [created, setCreated] = useState(false)
   const [pending, setPending] = useState(false)
 
   const change = (field: keyof SignUpInput) => (value: string) =>
@@ -27,6 +30,7 @@ function SignUp({ apiUrl, store, google }: SignUpProps) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setAlert(null)
+    setCreated(false)
     const invalid = validateSignUp(input)
     setErrors(invalid)
     if (Object.keys(invalid).length > 0) return
@@ -40,6 +44,7 @@ function SignUp({ apiUrl, store, google }: SignUpProps) {
     } else if (result.kind === 'fields') {
       setErrors(result.errors)
     } else if (result.kind === 'created') {
+      setCreated(true)
       setAlert(
         <>
           Your account was created. <Link to={paths.signIn}>Sign in</Link> to continue.
@@ -48,8 +53,8 @@ function SignUp({ apiUrl, store, google }: SignUpProps) {
     } else if (result.kind === 'taken') {
       setAlert(
         <>
-          An account with this email already exists. <Link to={paths.signIn}>Sign in</Link> instead, with Google or
-          your password.
+          An account with this email already exists. <Link to={paths.signIn}>Sign in</Link> instead
+          {google ? ', with Google or your password.' : ' with your password.'}
         </>,
       )
     } else {
@@ -58,10 +63,16 @@ function SignUp({ apiUrl, store, google }: SignUpProps) {
   }
 
   return (
-    <main className="page">
-      <h1>Sign up</h1>
-      {google}
-      <form className="auth-form" noValidate onSubmit={submit}>
+    <AuthLayout
+      title="Sign up"
+      switchLink={
+        <Link className="link" to={paths.signIn}>
+          I already have an account
+        </Link>
+      }
+      google={google}
+    >
+      <form className="auth-card-form" noValidate onSubmit={submit}>
         <TextField
           id="email"
           label="Email"
@@ -89,18 +100,12 @@ function SignUp({ apiUrl, store, google }: SignUpProps) {
           error={errors.confirmation}
           onChange={change('confirmation')}
         />
-        {alert && (
-          <p className="auth-alert" role="alert">
-            {alert}
-          </p>
-        )}
-        <button type="submit" disabled={pending}>
+        {alert && <AuthAlert tone={created ? 'info' : 'error'}>{alert}</AuthAlert>}
+        <button className="button button-primary button-block" type="submit" disabled={pending}>
           Sign up
         </button>
       </form>
-      <Link to={paths.signIn}>I already have an account</Link>
-      <Link to={paths.landing}>Back to the start</Link>
-    </main>
+    </AuthLayout>
   )
 }
 

@@ -5,7 +5,7 @@ reviewers: ["OlegShevtsov1 (implementing engineer)", "Tech Lead"]
 updated_at: "2026-10-22"
 feature_size: "M"
 ---
-<!-- Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/test-plan.md by sync-spec. Do not edit here. -->
+<!-- Copied from be@e189f0f581b7fb19b3d94dd70de5e0d2b9d57633:docs/features/todolist/test-plan.md by sync-spec. Do not edit here. -->
 
 # Test plan — todolist
 

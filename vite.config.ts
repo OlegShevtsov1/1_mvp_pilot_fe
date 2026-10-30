@@ -11,5 +11,6 @@ export default defineConfig({
     // tests/ runs the shell scripts against fake commands and git fixtures, hundreds of processes
     // in parallel; on a busy self-hosted runner a single case can take longer than the 5 s default.
     testTimeout: 30_000,
+    setupFiles: ['src/test/setup.ts'],
   },
 })

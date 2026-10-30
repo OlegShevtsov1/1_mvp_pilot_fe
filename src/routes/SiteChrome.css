@@ -1,0 +1,41 @@
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.site-footer a {
+  color: var(--color-text-muted);
+}
+
+.site-footer a:hover {
+  color: var(--color-text);
+}
+
+.site-footer a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.site-footer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-7);
+  /* The border spans the page while the brand and links line up with the 1200 px column above. */
+  padding: var(--space-4) max(var(--space-3), calc((100% - var(--content-width-max)) / 2 + var(--space-3)));
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.site-footer-bar .site-footer {
+  padding: 0;
+}
+
+.site-footer-bar a {
+  text-decoration: none;
+}

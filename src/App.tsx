@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 import './App.css'
 import GoogleSignIn from './auth/GoogleSignIn.tsx'
+import type { GoogleButtonText } from './auth/google.ts'
 import { createTokenStore } from './auth/tokenStore.ts'
 import type { AppConfig } from './config.ts'
 import type { ErrorTest } from './errorTest.ts'
 import Dashboard from './routes/Dashboard.tsx'
 import Landing from './routes/Landing.tsx'
+import { Privacy, Terms } from './routes/Legal.tsx'
 import SignIn from './routes/SignIn.tsx'
 import SignUp from './routes/SignUp.tsx'
 import { paths } from './routes/paths.ts'
@@ -38,6 +40,9 @@ function App({ config, errorTest }: AppProps) {
   const google = Boolean(config.GOOGLE_CLIENT_ID)
   const [apiStatus, setApiStatus] = useState(apiUrl ? 'checking…' : 'not configured')
   const [store] = useState(createTokenStore)
+  /** Google's button for sign-up or sign-in, or nothing when Google sign-in is not configured. */
+  const googleButton = (text: GoogleButtonText) =>
+    google ? <GoogleSignIn config={config} store={store} text={text} /> : undefined
 
   useEffect(() => {
     if (!apiUrl || !debug) return
@@ -55,7 +60,13 @@ function App({ config, errorTest }: AppProps) {
           <Route path={paths.landing} element={<Landing google={google} />} />
           <Route
             path={paths.signUp}
-            element={<SignUp apiUrl={apiUrl} store={store} google={<GoogleSignIn config={config} store={store} text="signup_with" />} />}
+            element={
+              <SignUp
+                apiUrl={apiUrl}
+                store={store}
+                google={googleButton('signup_with')}
+              />
+            }
           />
           <Route
             path={paths.signIn}
@@ -64,7 +75,7 @@ function App({ config, errorTest }: AppProps) {
                 apiUrl={apiUrl}
                 clientId={config.OAUTH_CLIENT_ID}
                 store={store}
-                google={<GoogleSignIn config={config} store={store} text="signin_with" />}
+                google={googleButton('signin_with')}
               />
             }
           />
@@ -72,6 +83,8 @@ function App({ config, errorTest }: AppProps) {
             path={paths.dashboard}
             element={<Dashboard apiUrl={apiUrl} clientId={config.OAUTH_CLIENT_ID} store={store} />}
           />
+          <Route path={paths.privacy} element={<Privacy contact={config.SUPPORT_EMAIL} />} />
+          <Route path={paths.terms} element={<Terms contact={config.SUPPORT_EMAIL} />} />
           <Route path="*" element={<Landing google={google} />} />
         </Routes>
       </BrowserRouter>

@@ -1,4 +1,4 @@
-# Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/contracts/openapi.yaml by sync-spec. Do not edit here.
+# Copied from be@e189f0f581b7fb19b3d94dd70de5e0d2b9d57633:docs/features/todolist/contracts/openapi.yaml by sync-spec. Do not edit here.
 # Contract of record for the todolist feature (rules: .claude/rules/api.md). Derived from PRD.md, sad.md (§6, ADR-0003 to
 # ADR-0007) and data-model.md; see api-sync-report.md. Conventions are the API's existing ones (success wrapped in
 # `data`, errors as `errors` / `error`), not the api-forge defaults, so no existing shape breaks.

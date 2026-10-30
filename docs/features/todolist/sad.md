@@ -2,13 +2,13 @@
 status: Approved
 owner: "OlegShevtsov1"
 reviewers: ["Tech Lead", "Security Lead"]
-updated_at: "2026-10-22"
+updated_at: "2026-10-28"
 feature_size: M
 stage: "04-05"
 ticket: "Trello #222 (PILOT-222)"
 target_surfaces: [backend-service, web-frontend]  # filled in §4 — subset of: backend-service | web-frontend | mobile-app | desktop-app | cli | worker | library-sdk. Read (never re-derived) by api-forge/complete-sequence-diagrams/break-tasks/plan-tests/review-feature → _shared/surfaces.md
 ---
-<!-- Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/sad.md by sync-spec. Do not edit here. -->
+<!-- Copied from be@e189f0f581b7fb19b3d94dd70de5e0d2b9d57633:docs/features/todolist/sad.md by sync-spec. Do not edit here. -->
 
 # Software Architecture Document — todolist
 
@@ -232,7 +232,9 @@ C4Container
 ## 6. Runtime view
 
 architecture-design seeds the primary flows here; `complete-sequence-diagrams` then covers every PRD §5 acceptance
-criterion. Participants are the §5 containers.
+criterion. Participants are the §5 containers. Flows 4–12 and the corrections to flows 1–3 were drawn on 2026-10-28
+from the shipped code (be `develop` `ef9b258`, fe `develop` `2491508`), not from the plan; the coverage tables at the
+end of this section map every §4 user story and every §5 acceptance criterion to its flow.
 
 **Critical flow 1: Google sign-in, new user or linking (AC-05, AC-06, AC-07)**
 
@@ -245,23 +247,31 @@ sequenceDiagram
     participant PG as PostgreSQL
     V->>SPA: chooses Google sign-in
     SPA->>G: asks for a Google ID token
-    G-->>SPA: signed ID token with email and verified flag
-    SPA->>API: exchanges the ID token for our tokens
-    API->>G: fetches signing keys (cached)
-    API->>API: checks signature, audience, issuer, expiry, verified email
-    alt not verified or check fails
-        API-->>SPA: refuses, nothing created or linked
+    alt visitor cancels the Google step
         SPA-->>V: Google sign-in did not complete, retry or use email
-    else email has no user
-        API->>PG: creates the user and the Google link
-        API->>PG: stores a new access and refresh token pair
-        API-->>SPA: token pair
-        SPA-->>V: dashboard
-    else email belongs to a password user
-        API->>PG: links Google, clears the password, revokes all tokens, rotates the legacy access token
-        API->>PG: stores a new access and refresh token pair
-        API-->>SPA: token pair
-        SPA-->>V: dashboard with the existing projects
+    else Google returns a credential
+        G-->>SPA: signed ID token with email and verified flag
+        SPA->>API: exchanges the ID token for our tokens
+        API->>G: fetches signing keys (cached)
+        API->>API: checks signature, audience, issuer, expiry, verified email
+        alt not verified, check fails, or the email's user is linked to another Google account
+            API-->>SPA: refuses, nothing created or linked
+            SPA-->>V: Google sign-in did not complete, retry or use email
+        else this Google account is already linked
+            API->>PG: stores a new access and refresh token pair
+            API-->>SPA: token pair
+            SPA-->>V: dashboard
+        else email has no user
+            API->>PG: creates the user and the Google link
+            API->>PG: stores a new access and refresh token pair
+            API-->>SPA: token pair
+            SPA-->>V: dashboard
+        else email belongs to a password user
+            API->>PG: links Google, clears the password, revokes all tokens, rotates the legacy access token
+            API->>PG: stores a new access and refresh token pair
+            API-->>SPA: token pair
+            SPA-->>V: dashboard with the existing projects
+        end
     end
 ```
 
@@ -288,7 +298,8 @@ sequenceDiagram
         SPA-->>U: new status shown, nothing typed is lost
     else refresh token revoked or too old
         API-->>SPA: refuses the refresh
-        SPA-->>U: sign-in screen, typed input kept for after sign-in
+        SPA->>SPA: clears the token pair
+        SPA-->>U: sign-in screen
     end
 ```
 
@@ -296,19 +307,355 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant C as Deploy pipeline
+    participant C as Legacy client
     participant API as Pilot API
     participant PG as PostgreSQL
+    Note over C: a device still on the legacy access token, or the deploy pipeline's legacy smoke pass
     C->>API: request with email and legacy access token, no bearer token
     API->>API: no bearer access token, falls back to the legacy headers
     alt before the cutoff and the legacy token matches
-        API->>PG: adds one to the legacy use count for today and this user
+        opt request not marked as the deploy smoke check
+            API->>PG: adds one to the legacy use count for today and this user
+        end
         API->>PG: reads the user's projects
         API-->>C: answer as for an access token
     else after the cutoff or no match
         API-->>C: refused, sign in again
     end
 ```
+
+**Critical flow 4: landing page (US-01, AC-01)**
+
+```mermaid
+sequenceDiagram
+    actor V as visitor
+    participant SPA as Web SPA
+    Note over V,SPA: Precondition: the visitor is not signed in
+    V->>SPA: opens the app, or any address the app does not know
+    SPA-->>V: what the app does, its features and a decorative preview with no real data
+    alt Google sign-in configured
+        SPA-->>V: starts Continue with Google (the sign-in screen) and Sign up with email and password
+    else no Google client configured
+        SPA-->>V: starts Sign up and Sign in with email
+    end
+    Note over V,SPA: Postcondition: no projects or tasks were requested or shown
+```
+
+**Critical flow 5: sign up with email and password (US-02, AC-02, AC-03, AC-04, AC-04b)**
+
+```mermaid
+sequenceDiagram
+    actor V as visitor
+    participant SPA as Web SPA
+    participant API as Pilot API
+    participant R as Redis
+    participant PG as PostgreSQL
+    V->>SPA: submits email, password and confirmation
+    SPA->>SPA: checks the email shape, a password of 6 to 128 characters and a matching confirmation
+    alt a field is wrong
+        SPA-->>V: names each wrong field and what it must be, nothing sent
+    else the fields look valid
+        SPA->>API: signs up with email and password
+        API->>R: counts this sign-up for the source, unless it is the marked deploy smoke check
+        alt more than five sign-ups from this source in the hour
+            API-->>SPA: refused, wait an hour
+            SPA-->>V: too many attempts, wait and try again
+        else within the limit
+            API->>PG: validates and saves the user
+            alt the email already belongs to a user
+                API-->>SPA: refused, email taken
+                SPA-->>V: an account with this email exists, sign in with Google or the password
+            else another field refused
+                API-->>SPA: refused with the field messages
+                SPA-->>V: names each wrong field and what it must be
+            else saved
+                Note over API,PG: persists user
+                API->>PG: stores a new access and refresh token pair
+                Note over API,PG: persists access token row
+                API-->>SPA: user, legacy access token and token pair
+                SPA->>SPA: keeps the token pair
+                SPA-->>V: dashboard
+            else saved, no web client configured (ADR-0008)
+                Note over API,PG: persists user
+                API-->>SPA: user and legacy access token, no token pair
+                SPA-->>V: account created, sign in to continue
+            end
+        end
+    end
+```
+
+**Critical flow 6: sign in with email and password (US-04, AC-08, AC-09, AC-10)**
+
+```mermaid
+sequenceDiagram
+    actor U as user
+    participant SPA as Web SPA
+    participant API as Pilot API
+    participant R as Redis
+    participant PG as PostgreSQL
+    Note over U,SPA: Precondition: the user may be signed in on another device
+    U->>SPA: submits email and password
+    SPA->>API: asks for a token pair with the password grant
+    API->>R: counts this attempt for the source in this minute
+    alt ten failed attempts from this source already counted this minute
+        API-->>SPA: refused before the password is checked, wait a minute
+        SPA-->>U: too many attempts, wait and try again
+    else within the limit
+        API->>PG: finds the user by email ignoring capitals, locks the row, checks the password
+        alt no such user or wrong password
+            Note over API,R: the attempt stays counted as a failure
+            API-->>SPA: one refusal for both cases
+            SPA-->>U: wrong email or password
+        else password matches
+            API->>R: gives the attempt back
+            API->>PG: stores a new access and refresh token pair
+            Note over API,PG: persists access token row, the other device's row is untouched
+            API-->>SPA: token pair
+            SPA->>SPA: keeps the token pair
+            SPA-->>U: dashboard
+        end
+    end
+    Note over API,R: the legacy sign-in door shares the same failure count
+```
+
+**Critical flow 7: sign out on this device (US-05, US-06, AC-11, AC-11b)**
+
+```mermaid
+sequenceDiagram
+    actor U as user
+    participant SPA as Web SPA
+    participant L as Legacy client
+    participant API as Pilot API
+    participant PG as PostgreSQL
+    Note over U,API: Precondition: the user is signed in on device A and on device B
+    alt device A uses a token pair
+        U->>SPA: signs out on device A
+        SPA->>API: signs out with device A's access token, renewing it at most once
+        SPA->>SPA: clears device A's token pair at once
+        SPA-->>U: sign-in screen
+        API->>PG: revokes device A's token row, which ends its access and refresh token
+        Note over API,PG: persists the revocation of that row only
+        API-->>SPA: signed out, the device does not wait for this answer
+        Note over SPA,PG: device B's token row is untouched and keeps working
+    else device A still uses the legacy access token, before the cutoff
+        U->>L: signs out on device A
+        L->>API: signs out with email and legacy access token
+        API->>PG: counts the legacy use, then gives the account a new legacy access token
+        Note over API,PG: persists the user's new legacy access token
+        API-->>L: signed out
+        Note over L,PG: every device that used the old legacy access token is refused from now on and must sign in again
+    end
+```
+
+**Critical flow 8: create, rename and delete a project (US-07, AC-14, AC-15, AC-16)**
+
+```mermaid
+sequenceDiagram
+    actor U as project owner
+    participant SPA as Web SPA
+    participant API as Pilot API
+    participant PG as PostgreSQL
+    Note over U,SPA: Precondition: signed in, the dashboard is open
+    alt create or rename
+        U->>SPA: submits a project name and description
+        SPA->>SPA: checks a name of 5 to 20 and a description of 20 to 120 characters
+        alt a length is outside its range
+            SPA-->>U: shows the allowed length for that field, nothing sent
+        else the lengths fit
+            SPA->>API: creates a project, or renames one of the owner's projects
+            API->>PG: validates and saves the project, a rename only among the owner's projects
+            alt the server refuses a length
+                API-->>SPA: refused with the field messages
+                SPA-->>U: shows the allowed length for that field
+            else saved
+                Note over API,PG: persists project owned by this user
+                API-->>SPA: saved project
+                SPA-->>U: the project on the dashboard with the new name
+            end
+        end
+    else delete
+        U->>SPA: deletes a project
+        SPA->>API: deletes one of the owner's projects
+        API->>PG: finds it among the owner's projects and checks whether it has tasks
+        alt the project still has tasks
+            API-->>SPA: refused, the project has tasks
+            SPA-->>U: a project that still has tasks cannot be deleted, so it was kept
+        else no tasks
+            API->>PG: deletes the project
+            Note over API,PG: removes project
+            API-->>SPA: deleted
+            SPA-->>U: the project is gone from the dashboard
+        end
+    end
+```
+
+**Critical flow 9: add a task and change its status (US-08, AC-18, AC-19)**
+
+```mermaid
+sequenceDiagram
+    actor U as project owner
+    participant SPA as Web SPA
+    participant API as Pilot API
+    participant PG as PostgreSQL
+    Note over U,SPA: Precondition: signed in, viewing one of their projects
+    alt add a task
+        U->>SPA: submits a task name and description
+        SPA->>SPA: checks that name and description are not empty
+        alt a field is empty
+            SPA-->>U: shows that the field must not be empty, nothing sent
+        else the fields are filled
+            SPA->>API: creates the task as not started in that project
+            API->>PG: finds the project among the owner's projects, validates and saves the task
+            alt the server refuses a field
+                API-->>SPA: refused with the field messages
+                SPA-->>U: shows what is allowed
+            else saved
+                Note over API,PG: persists task with status not started
+                API-->>SPA: saved task
+                SPA-->>U: the task shown as not started
+            end
+        end
+    else change a task's status
+        U->>SPA: marks the task with one of its two other statuses, one action
+        SPA->>API: updates that task's status alone
+        API->>PG: finds the task within the owner's project, validates and saves the status
+        alt the status is not one of not started, in progress or completed
+            API-->>SPA: refused with the allowed statuses
+            SPA-->>U: status must be not started, in progress or completed
+        else saved
+            Note over API,PG: persists task status
+            API-->>SPA: updated task
+            SPA-->>U: the dashboard shows the new status
+        end
+    end
+```
+
+**Critical flow 10: dashboard with the status filter (US-09, AC-20, AC-22)**
+
+```mermaid
+sequenceDiagram
+    actor U as project owner
+    participant SPA as Web SPA
+    participant API as Pilot API
+    participant R as Redis
+    participant PG as PostgreSQL
+    U->>SPA: opens the dashboard
+    alt no token pair on this device, a visitor or a device that signed out
+        SPA-->>U: sign-in screen, no request sent and nothing shown
+    else a token pair is kept
+        SPA->>API: lists the owner's projects with their tasks
+        Note over SPA,API: a refused access token follows flow 2, a refused refresh ends at the sign-in screen
+        API->>PG: reads how many projects the owner has and when one last changed
+        API->>R: looks up the owner's cached list for that state
+        alt not cached
+            API->>PG: reads the owner's projects with their tasks
+            API->>R: caches the list for 15 minutes
+        end
+        API-->>SPA: only this owner's projects, with their tasks and statuses
+        SPA-->>U: all projects with their tasks and statuses
+        U->>SPA: picks a task status filter
+        SPA->>SPA: keeps only the projects that have a task in that status, no new request
+        SPA-->>U: the filtered list
+    end
+```
+
+**Critical flow 11: guidance to a first project and task (US-10, AC-21)**
+
+```mermaid
+sequenceDiagram
+    actor U as user
+    participant SPA as Web SPA
+    participant API as Pilot API
+    Note over U,SPA: Precondition: signed in, no projects yet
+    U->>SPA: opens the dashboard
+    SPA->>API: lists the owner's projects as in flow 10
+    alt the list did not load
+        API-->>SPA: no usable list
+        SPA-->>U: could not load the projects, with a retry and no guidance
+    else the list loaded
+        API-->>SPA: an empty list
+        SPA-->>U: no projects yet, create your first project
+        U->>SPA: creates the first project as in flow 8
+        SPA-->>U: next, add a first task to your project
+        U->>SPA: adds the first task as in flow 9
+        SPA-->>U: the guidance is gone, the task shows as not started
+    end
+```
+
+**Cross-cutting flow 12: another user's project or task (US-07, US-08, US-09, AC-17)**
+
+```mermaid
+sequenceDiagram
+    participant SPA as Web SPA
+    participant API as Pilot API
+    participant PG as PostgreSQL
+    Note over SPA,API: Precondition: a valid access token for user A
+    SPA->>API: reads, changes or deletes a project or a task by its id
+    API->>PG: looks the project up among user A's projects only, then the task within that project
+    alt the project or task belongs to another user, or does not exist
+        API-->>SPA: not found, the same answer in both cases
+        Note over API,PG: nothing is read out, changed or deleted
+    else it is user A's
+        API->>PG: reads, changes or deletes it as in flows 8 to 10
+        API-->>SPA: the answer of that operation
+    end
+```
+
+**Coverage — user stories (PRD §4)**
+
+| US | Flows |
+|---|---|
+| US-01 Understand the app before signing up | 4 |
+| US-02 Sign up with email and password | 5 |
+| US-03 Start with Google sign-in | 1 |
+| US-04 Sign in with email and password | 6 |
+| US-05 Sign out on this device | 7 |
+| US-06 Keep access during the switch | 3, 7 (legacy branch) |
+| US-07 Create and organize my projects | 8, 12 |
+| US-08 Add tasks and move their status | 9, 12 |
+| US-09 See my work at a glance | 10, 12 |
+| US-10 Get guided to a first task | 11 |
+
+**Coverage — acceptance criteria (PRD §5)**
+
+| AC | Where it is shown |
+|---|---|
+| AC-01 | Flow 4 |
+| AC-02 | Flow 5, branch "saved" (and "saved, no web client configured", ADR-0008) |
+| AC-03 | Flow 5, branches "a field is wrong" and "another field refused" |
+| AC-04 | Flow 5, branch "the email already belongs to a user" |
+| AC-04b | Flow 5, branch "more than five sign-ups from this source in the hour" |
+| AC-05 | Flow 1, branch "email has no user" |
+| AC-06 | Flow 1, branch "email belongs to a password user" |
+| AC-07 | Flow 1, branches "visitor cancels the Google step" and "not verified, check fails, …" |
+| AC-08 | Flow 6, branch "password matches" |
+| AC-09 | Flow 6, branch "no such user or wrong password" |
+| AC-10 | Flow 6, branch "ten failed attempts from this source already counted this minute" |
+| AC-11 | Flow 7, branch "device A uses a token pair" |
+| AC-11b | Flow 7, branch "device A still uses the legacy access token" |
+| AC-12 | Flow 3, branch "before the cutoff and the legacy token matches" |
+| AC-13 | Flow 3, branch "after the cutoff or no match" |
+| AC-14 | Flow 8, branch "create or rename", "saved" |
+| AC-15 | Flow 8, branches "a length is outside its range" and "the server refuses a length" |
+| AC-16 | Flow 8, branch "the project still has tasks" |
+| AC-17 | Flow 12 |
+| AC-18 | Flow 9, branches "add a task", "saved" and "change a task's status", "saved" |
+| AC-19 | Flow 9, branches "a field is empty", "the server refuses a field" and "the status is not one of …" |
+| AC-20 | Flow 10 |
+| AC-21 | Flow 11 |
+| AC-22 | Flow 10, branch "no token pair on this device" (a refused refresh: flow 2) |
+
+**Flagged by complete-sequence-diagrams (not changed here):**
+
+- §5 names the sign-out controller `tokens_controller.rb`; the code is `app/controllers/api/v1/sign_out_controller.rb`.
+- The status filter of flow 10 runs in the SPA over the full list; the API's `task_status` filter
+  (`Projects::Index`) has no caller in the SPA.
+- Flow 2: when the refresh is refused, the SPA clears the pair and shows the sign-in screen; input typed into an open
+  form is not kept (ADR-0006 asks that typed input is not lost on a refresh).
+- `Legacy client` (flows 3 and 7) is not a §5 container: it stands for a device on the legacy access token and for the
+  deploy pipeline's legacy smoke pass.
+- Devise's default routes (`POST /users/sign_in`, `POST /users`) are not drawn: they are not part of the feature's
+  flows and are tracked as review finding P0-1 (`_review/review-2026-10-28.md`).
 
 ## 7. Deployment view
 
@@ -380,6 +727,7 @@ record them and this feature's overrides.
 | 0006 | Use a one-hour access token with a rotating refresh token that dies after 30 idle days | Accepted | §4 |
 | 0007 | Scope project and task lookups to the owner, so other users' items are not found | Accepted | §8 |
 | 0008 | Sign-up returns the legacy fields only while no web client is configured | Accepted | §5 |
+| 0009 | Refuse sign-ins from a source after ten failures a minute, before the password is checked | Accepted | §8 |
 
 ADR files live under `docs/features/todolist/adr/NNNN-<title>.md`.
 
@@ -428,7 +776,7 @@ Each quality goal from §1 expanded into a testable scenario; numbers are PRD §
 | A script running on the page reads the token pair from localStorage (PRD §6.1 stolen-token abuse case) | Medium | Strict Content-Security-Policy from the frontend's nginx, no third-party scripts, user text always rendered as text; access token lives one hour (ADR-0006, §7) | Frontend owner |
 | A lost device cannot be signed out from another device (accepted in PRD §6.1) | Medium | Google sign-in revokes all of the user's access; "sign out everywhere" is the first cut feature to return after launch (PRD §8) | OlegShevtsov1 |
 | Wrong client address behind kamal-proxy makes all visitors share one rate limit, or lets one bypass it | Medium | Read the forwarded client address only from kamal-proxy; a request spec pins it (§7) | Backend |
-| `devise_for :users` mounts Devise's default routes whose behaviour in API-only mode is unknown (`config/routes.rb:8`, architecture map) | Medium | The first auth task lists the mounted routes and keeps only those the feature needs, with a routing spec | Backend |
+| `devise_for :users` mounts Devise's default routes whose behaviour in API-only mode is unknown (`config/routes.rb:8`, architecture map) | Medium | Mitigated (PILOT-362): `devise_for :users, skip: :all` mounts none of them; `spec/routing/auth_routes_spec.rb` pins the kept auth routes (ADR-0009) | Backend |
 | `ApplicationController#authenticate_user!` is an empty override, so a controller not inheriting `Api::V1::BaseController` is public (`app/controllers/application_controller.rb:4`) | Medium | New controllers inherit `Api::V1::BaseController`; only Doorkeeper's token endpoint, sign-up and (until the cutoff) the legacy sign-in are public, each with a spec, and the failed-sign-in counter covers the legacy sign-in too | Backend |
 | The token endpoint and the AC-17 "not found" answer change the public contract and could break `bin/swagger_smoke` or the frontend | Medium | rswag specs, `swagger/v1/swagger.json` and `bin/swagger_smoke` updated in the same release; frontend built against the regenerated contract (ADR-0007) | Backend |
 | Seven ADRs of work against about two person-weeks of backend budget | Medium | The `break-tasks` estimate decides; PRD §8 owner decides on cuts | OlegShevtsov1 |

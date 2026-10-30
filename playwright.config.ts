@@ -11,5 +11,13 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   use: { baseURL },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', testIgnore: /journey\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
+    // Signs up a real account, so it never runs as part of the plain `npm run e2e`.
+    {
+      name: 'journey',
+      testMatch: /journey\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], screenshot: 'only-on-failure' },
+    },
+  ],
 })

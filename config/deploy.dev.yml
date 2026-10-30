@@ -23,3 +23,5 @@ env:
     GOOGLE_CLIENT_ID: <%= ENV.fetch("GOOGLE_CLIENT_ID", "").to_json %>
     # Public uid of the OAuth web application from the GitHub environment variable OAUTH_CLIENT_ID; empty when unset.
     OAUTH_CLIENT_ID: <%= ENV.fetch("OAUTH_CLIENT_ID", "").to_json %>
+    # Public contact address for the privacy and terms pages from the GitHub environment variable SUPPORT_EMAIL; empty when unset.
+    SUPPORT_EMAIL: <%= ENV.fetch("SUPPORT_EMAIL", "").to_json %>

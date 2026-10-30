@@ -7,7 +7,7 @@ feature_size: M
 stage: "04-05"
 ticket: "PILOT-222"
 ---
-<!-- Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/adr/0006-short-access-token-with-rotating-30-day-idle-refresh-token.md by sync-spec. Do not edit here. -->
+<!-- Copied from be@e189f0f581b7fb19b3d94dd70de5e0d2b9d57633:docs/features/todolist/adr/0006-short-access-token-with-rotating-30-day-idle-refresh-token.md by sync-spec. Do not edit here. -->
 
 # 0006 — Use a one-hour access token with a rotating refresh token that dies after 30 idle days
 

@@ -1,0 +1,62 @@
+name: Dev Journey
+
+# Walks the e2e-through-UI journey (landing, sign-up, first project, first task,
+# completed, sign-out) against the deployed dev app and its real backend, after
+# each successful Dev Deploy and on demand. The dev app and API are public, so
+# unlike Dev Deploy this needs neither the VPN nor any secret. Each run signs up one
+# throwaway account, and sign-ups are limited per source IP, so runs never overlap.
+on:
+  workflow_run:
+    workflows: [Dev Deploy]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-journey
+  cancel-in-progress: false
+
+jobs:
+  journey:
+    name: Sign-up to completed task on dev
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      - name: Dev app URL
+        id: target
+        run: |
+          source deploy/lib.sh
+          load_project_env
+          echo "url=$(destination_url dev)" >> "$GITHUB_OUTPUT"
+
+      - name: Journey
+        env:
+          E2E_BASE_URL: ${{ steps.target.outputs.url }}
+        run: npm run e2e:journey
+
+      - name: Keep the failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-journey-results
+          path: test-results/
+          retention-days: 7

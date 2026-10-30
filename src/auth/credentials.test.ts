@@ -98,6 +98,21 @@ describe('signUp', () => {
       errors: { confirmation: 'The passwords do not match.' },
     })
   })
+
+  it('tells the visitor to wait the Retry-After seconds when sign-ups from this source are too many (AC-04b)', async () => {
+    const fetch = answering(
+      Response.json({ errors: ['Too many attempts, try again later'] }, { status: 429, headers: { 'Retry-After': '30' } }),
+    )
+
+    expect(await signUp(apiUrl, valid, fetch)).toEqual({ kind: 'wait', seconds: 30 })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('still tells the visitor to wait when a 429 carries no usable Retry-After (AC-04b)', async () => {
+    const fetch = answering(Response.json({ errors: ['Too many attempts, try again later'] }, { status: 429 }))
+
+    expect(await signUp(apiUrl, valid, fetch)).toEqual({ kind: 'wait', seconds: null })
+  })
 })
 
 describe('signIn', () => {
@@ -249,6 +264,43 @@ describe('signOut', () => {
     const signOuts = fetch.mock.calls.filter(([url]) => url === `${apiUrl}/api/v1/sign_out`)
     expect(signOuts.map(([, init]) => new Headers(init?.headers).get('Authorization'))).toEqual(['Bearer a1', 'Bearer a2'])
     expect(fetch.mock.calls.filter(([url]) => url === `${apiUrl}/oauth/token`)).toHaveLength(1)
+  })
+
+  it('repeats with the renewal another request of this tab already finished, so it never spends the rotated refresh token', async () => {
+    const store = memoryStore()
+    store.pair = { accessToken: 'a1', refreshToken: 'r1' }
+    let answerRefresh: (response: Response) => void = () => {}
+    let answerSignOut: (response: Response) => void = () => {}
+    let spent = false
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation((url, init) => {
+      if (url === `${apiUrl}/oauth/token`) {
+        if (spent) return Promise.resolve(new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 }))
+        spent = true
+        return new Promise<Response>((resolve) => (answerRefresh = resolve))
+      }
+      const authorization = new Headers(init?.headers).get('Authorization')
+      if (url === `${apiUrl}/api/v1/sign_out` && authorization === 'Bearer a1') {
+        return new Promise<Response>((resolve) => (answerSignOut = resolve))
+      }
+      return Promise.resolve(new Response(null, { status: authorization === 'Bearer a2' ? 204 : 401 }))
+    })
+    const onSignedOut = vi.fn()
+    const api = createApiClient({ apiUrl, clientId: 'web-client', store, onSignedOut, fetch })
+
+    const loading = api.request('/api/v1/projects')
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+    const signingOut = signOut(api)
+    store.clear()
+    answerRefresh(new Response(JSON.stringify({ ...pair, access_token: 'a2', refresh_token: 'r2' })))
+    await loading.catch(() => {})
+    answerSignOut(new Response(null, { status: 401 }))
+    await signingOut
+
+    const signOuts = fetch.mock.calls.filter(([url]) => url === `${apiUrl}/api/v1/sign_out`)
+    expect(signOuts.map(([, init]) => new Headers(init?.headers).get('Authorization'))).toEqual(['Bearer a1', 'Bearer a2'])
+    expect(fetch.mock.calls.filter(([url]) => url === `${apiUrl}/oauth/token`)).toHaveLength(1)
+    expect(store.read()).toBeNull()
+    expect(onSignedOut).not.toHaveBeenCalled()
   })
 
   it('never throws when the server cannot be reached', async () => {

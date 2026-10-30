@@ -2,8 +2,7 @@ import { type FormEvent, type ReactNode, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { type SignInInput, interruptionMessage, signIn } from '../auth/credentials.ts'
 import type { TokenStore } from '../auth/tokenStore.ts'
-import './AuthForm.css'
-import './Landing.css'
+import { AuthAlert, AuthLayout } from './AuthLayout.tsx'
 import TextField from './TextField.tsx'
 import { paths } from './paths.ts'
 
@@ -42,10 +41,16 @@ function SignIn({ apiUrl, clientId, store, google }: SignInProps) {
   }
 
   return (
-    <main className="page">
-      <h1>Sign in</h1>
-      {google}
-      <form className="auth-form" noValidate onSubmit={submit}>
+    <AuthLayout
+      title="Sign in"
+      switchLink={
+        <Link className="link" to={paths.signUp}>
+          Create an account
+        </Link>
+      }
+      google={google}
+    >
+      <form className="auth-card-form" noValidate onSubmit={submit}>
         <TextField
           id="email"
           label="Email"
@@ -62,18 +67,12 @@ function SignIn({ apiUrl, clientId, store, google }: SignInProps) {
           value={input.password}
           onChange={change('password')}
         />
-        {alert && (
-          <p className="auth-alert" role="alert">
-            {alert}
-          </p>
-        )}
-        <button type="submit" disabled={pending}>
+        {alert && <AuthAlert tone="error">{alert}</AuthAlert>}
+        <button className="button button-primary button-block" type="submit" disabled={pending}>
           Sign in
         </button>
       </form>
-      <Link to={paths.signUp}>Create an account</Link>
-      <Link to={paths.landing}>Back to the start</Link>
-    </main>
+    </AuthLayout>
   )
 }
 

@@ -1,0 +1,109 @@
+{
+  "files": {
+    "PRD.md": {
+      "copy_sha256": "4a5c194da61ce5926ec4dea1540dcbd3d4a7cd3525fdfb09b50d1d3dfe4b5e84",
+      "source_sha256": "08b390f5b199867d1f3710af3ff707231b3dde024ab87e69d3357ab7f726b4d1"
+    },
+    "adr/0001-keep-one-semantic-token-layer-rewritten-in-place.md": {
+      "copy_sha256": "48dc0452afd1778acd0c8f84f0473e679989f33cd1201cbf3e41effd43431157",
+      "source_sha256": "0360047ebb4568129d8fe18bb8ecef14d7c259063622ca6e5d2feebfd8840447"
+    },
+    "adr/0002-guard-design-values-and-motion-with-a-vitest-stylesheet-scan.md": {
+      "copy_sha256": "3864fa1b5e1700e955daf166a2e35ce7518f743785d70e3da0e4ea779c72b80c",
+      "source_sha256": "a9ac62eb9c1617c93e3a47b4a838d0a548e554723c17a6bfac5a494b13c7e046"
+    },
+    "adr/0003-switch-token-values-first-then-restyle-one-screen-per-pr.md": {
+      "copy_sha256": "96ad5312d02b101831adab4a01214bec7a3797c612f7e583415fea65cfc730a8",
+      "source_sha256": "7c879da7031ca00595dd0549126381a94d34829c7ecade1fbe8b0ba28bdd7de7"
+    },
+    "adr/0004-share-the-page-shell-and-controls-through-one-base-stylesheet.md": {
+      "copy_sha256": "8cd53818f58985810992026da9830f3e3964e7c7bb5ae825035007d8e1a64c03",
+      "source_sha256": "c5b3cbe589a6e8d0c9758b34b81fdcc3135d183a4a7c145b1eb81a95650a4042"
+    },
+    "adr/0005-scope-the-landing-palette-as-an-override-of-the-same-token-names.md": {
+      "copy_sha256": "207f4ab3077be95aa6562f1c031b0b6ac133566b0fc6c599f54e16f3bb5cb956",
+      "source_sha256": "ce5ada8a050648ca21377cefddc149c4f22f0d64c0509f1445d86069d026267f"
+    },
+    "adr/0006-self-host-public-sans-for-body-text-and-keep-space-grotesk-for-display.md": {
+      "copy_sha256": "1887dd439ce47a60c3f0d4b20774939e1a075263398be43aca5f78f1345703e1",
+      "source_sha256": "82111bf29e2e7b444b0d94bfcfb75ed3400f113cd8042e121ed6c22c769e7b1b"
+    },
+    "sad.md": {
+      "copy_sha256": "17df69b30dfbfe06dabca81d6afc384f8321f923f22dc3913fec7d7f150ba451",
+      "source_sha256": "8b43e046557d4875371fa9cdfc2b727aa44e723e7288832066a8354e607eedf2"
+    },
+    "tasks/_epic.md": {
+      "copy_sha256": "ee0d2cdb5cfa04cd98903423ced6d86bd79188676a1fc3685da6e5e6d976d2b9",
+      "source_sha256": "cf6b37c63546ce01eeafd61eeb5175616f7a1bd7ce60857eaaaaac1fafb51a93"
+    },
+    "tasks/t1-stylesheet-guard.md": {
+      "copy_sha256": "4a0df645015c5b7cc1a1411c67b8a6e8492a5ab5035f4273a240a9efe5362c26",
+      "source_sha256": "6239721e91edce3d6fbdbe827c71cb60581f1c36e313fabddff8126e17a03959"
+    },
+    "tasks/t10-guard-all-stylesheets.md": {
+      "copy_sha256": "eb141f692397c0e71074d6bea7945d3d9a3e15ef8f163b9a187fa0903a73bee1",
+      "source_sha256": "e9b5e95f23f07a5917fbeebd1b5c3e3c42e76a735777180fab3a9f3884f3e66a"
+    },
+    "tasks/t11-close-out-docs.md": {
+      "copy_sha256": "d36ae2d546c7805f912321b0c6f810c739b1bbc711832e91e727bc0c0e222e83",
+      "source_sha256": "321c601401a951622697237f6f10dc6359edbdd6f2d255b0731c13d599aa2385"
+    },
+    "tasks/t12-public-sans.md": {
+      "copy_sha256": "250933d3dff6d8dfa75e847f64123c7635ba7e31c9a518a9a967114aacebf71f",
+      "source_sha256": "f000acefd157901dbe3fb6f1274a4104fc158e20ec3c21b34f17f9ae0061bf68"
+    },
+    "tasks/t13-landing-palette-tokens.md": {
+      "copy_sha256": "f3e526d3e366cad36a24fec9dc8946170dad9ee0a3e53945b8c68e08b259df27",
+      "source_sha256": "9f53fb0b8dac3ecd2387d962813cbc65e2ba6e10f9d0c8118bb4cb2ae1f0ec3f"
+    },
+    "tasks/t14-landing-hero.md": {
+      "copy_sha256": "fbe6fd5457a44263743fa91a1a70c55fe43838bf75420b32fbe60084954b244d",
+      "source_sha256": "6786b29001e0e725b9d2f09e152680a017598ebe47e107deca0584a350332525"
+    },
+    "tasks/t15-landing-sections.md": {
+      "copy_sha256": "2dc80d490656e75e923484e94928999a8d369fa846d1f693ff88dad33f318707",
+      "source_sha256": "b4d4471cb4cd65f769e0fba9043c8acdc6f2047cc430a7fee3197bd2045867b5"
+    },
+    "tasks/t16-sign-up-screen.md": {
+      "copy_sha256": "9e23c62ee512ec16487a08a19119c65feda8548405b3e6be133f8e3d8600bc17",
+      "source_sha256": "04a507e483a5cd2b7dc93a71a8f52d994b45cf9a2fdb192f6b357ec0f32aad4a"
+    },
+    "tasks/t17-sign-in-screen.md": {
+      "copy_sha256": "90da69acce1ae3a3fbae80b9fdb4da252541441b181101e6dec56f140c1e160e",
+      "source_sha256": "2de555b9d29bfc83dc8dfb365b1db6310fbcd1c06bbe8db178e96c3a881b1ee0"
+    },
+    "tasks/t18-cabinet-shell.md": {
+      "copy_sha256": "9e1a6128bb37efc16ff11d0d05d3447a1c016238d005afec2141fbc2aa2b358b",
+      "source_sha256": "0e3014c583a5d6851af516a3e5ad4cf09a7dee8e3129ba075411bb1271285986"
+    },
+    "tasks/t19-cabinet-cards-states.md": {
+      "copy_sha256": "7817c10632b8ecc6c37f6462cebeb4828509a29b7b436386371d8c9e3e395236",
+      "source_sha256": "6d953027e8e8fce7eeebb31edab53f2b45c315a8ccb3550acc0d1a7bfe1544b4"
+    },
+    "tasks/t2-token-values.md": {
+      "copy_sha256": "07d148cf3d63cfaf387a78fef5072c2dc816b08d85bf545dd832cec00501cb55",
+      "source_sha256": "016055590ca0639199f472bfe25b55f7e69ae7cbfbac49500b1be0831d53df18"
+    },
+    "tasks/t20-crash-screen.md": {
+      "copy_sha256": "a9ffefc81070ee17baa2a65215deaf31369d2334b6548f66b2a7518773f2a963",
+      "source_sha256": "fcbc6be1feef22c7e57acfd473fb487409edc818de66a0c7d2784257e4959362"
+    },
+    "tasks/t3-base-stylesheet-brand-mark.md": {
+      "copy_sha256": "0b8129aeb8db17f3dfd6947244e9fd9114725a68417ca3d096f2d0eb6b13e970",
+      "source_sha256": "949b7fdaee2f33d4aee41659c5ace09d4da5fe1882791a9d8ff0403fa848228b"
+    },
+    "tasks/t4-visual-check-seam.md": {
+      "copy_sha256": "4769d650228c6eabb6018d36457cb1600326ee4a169e210ebf9d2927401665c5",
+      "source_sha256": "8b207034b5fed562582c3abadf96d17ca98822531ea83b6d8771edcbe66a9917"
+    },
+    "tasks/tasks.json": {
+      "copy_sha256": "7f25876c34bc896299fc0e9e920d97ff9584af24c06f36a68cadcda4e4bb658d",
+      "source_sha256": "6006e819741b9887199bbc4a2a8cc186568039c3f45416f6deec4ae2e748afe8"
+    }
+  },
+  "source_repo": "git@github.com:OlegShevtsov1/1_mvp_pilot_be.git",
+  "source_sha": "5663ab6a7e9aeaf70237a282dabec48f2c6b1ca4",
+  "trello_card_id": "6ae1d92805529c9d81ab35e5",
+  "trello_card_id_short": 368,
+  "trello_card_title": "redesign: \u041d\u043e\u0432\u0438\u0439 \u0434\u0438\u0437\u0430\u0439\u043d \u043b\u0435\u043d\u0434\u0456\u043d\u0433\u0443 \u0442\u0430 \u043a\u0430\u0431\u0456\u043d\u0435\u0442\u0443"
+}

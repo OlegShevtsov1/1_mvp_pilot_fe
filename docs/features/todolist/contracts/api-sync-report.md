@@ -1,4 +1,4 @@
-<!-- Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/contracts/api-sync-report.md by sync-spec. Do not edit here. -->
+<!-- Copied from be@e189f0f581b7fb19b3d94dd70de5e0d2b9d57633:docs/features/todolist/contracts/api-sync-report.md by sync-spec. Do not edit here. -->
 # API sync report — todolist
 
 - **Scenario:** A (`data-model.md` exists). `unresolved_origins` is empty.
@@ -23,7 +23,7 @@
 |---|---|---|
 | Project.id / name / description | data-model.md → existing `projects` table; `name` 5–20 and `description` 20–120 from `app/models/project.rb:2-5` (the columns themselves are plain string/text) | high |
 | Project.tasks | existing `ProjectSerializer` (`has_many :tasks`) | high |
-| Task.id / name / description / status | existing `tasks` table; `status` enum from `app/models/task.rb:4` | high |
+| Task.id / name / description / status | existing `tasks` table; `status` enum from `app/models/task.rb:2-7` | high |
 | TokenRequest.grant_type / client_id / username / password | ADR-0003; `oauth_applications.uid` (data-model.md migration 01) | high |
 | TokenRequest.id_token | ADR-0004 (Google ID token); verified, not stored | medium (no column: transient input) |
 | TokenRequest.refresh_token | `oauth_access_tokens.refresh_token` (migration 02) | high |

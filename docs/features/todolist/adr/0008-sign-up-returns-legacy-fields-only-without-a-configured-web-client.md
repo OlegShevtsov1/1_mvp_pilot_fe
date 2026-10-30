@@ -7,7 +7,7 @@ feature_size: M
 stage: "07"
 ticket: "PILOT-233"
 ---
-<!-- Copied from be@f8d0b86d06ead4db12af522fa3497992646bd2d0:docs/features/todolist/adr/0008-sign-up-returns-legacy-fields-only-without-a-configured-web-client.md by sync-spec. Do not edit here. -->
+<!-- Copied from be@e189f0f581b7fb19b3d94dd70de5e0d2b9d57633:docs/features/todolist/adr/0008-sign-up-returns-legacy-fields-only-without-a-configured-web-client.md by sync-spec. Do not edit here. -->
 
 # 0008 — Sign-up returns the legacy fields only while no web client is configured
 

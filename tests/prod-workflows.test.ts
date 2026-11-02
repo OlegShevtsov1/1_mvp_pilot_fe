@@ -1,10 +1,12 @@
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { checkoutWithZone, projectEnv, repoRoot, stepOutput } from './support.ts'
+import { calls, checkoutWithZone, fakeCommand, projectEnv, repoRoot, stepOutput, tempDir } from './support.ts'
 
 interface Step {
+  name?: string
   id?: string
   uses?: string
   run?: string
@@ -26,7 +28,7 @@ interface Job {
 
 interface Workflow {
   'run-name'?: string
-  on: { workflow_dispatch?: { inputs: Record<string, { required?: boolean; type?: string; options?: string[] }> } }
+  on: { workflow_dispatch?: { inputs: Record<string, { required?: boolean; type?: string; options?: string[]; default?: string }> } }
   concurrency: unknown
   jobs: Record<string, Job>
 }
@@ -47,6 +49,74 @@ function indexOf(steps: Step[], match: (step: Step) => boolean): number {
 }
 
 const runs = (step: Step, script: string) => step.run?.includes(script) ?? false
+
+function named(job: Job, name: string): Step {
+  const step = job.steps.find((candidate) => candidate.name === name)
+  expect(step, name).toBeDefined()
+  return step as Step
+}
+
+/** Runs a step's script with fake ssh-agent, ssh-add and nc; returns the key ssh-add read and the host nc probed. */
+function runHostStep(step: Step, env: Record<string, string>) {
+  const bin = tempDir('host-step-')
+  fakeCommand(bin, 'ssh-agent', "echo 'SSH_AUTH_SOCK=/tmp/agent; SSH_AGENT_PID=1;'")
+  fakeCommand(bin, 'ssh-add', `cat > "${bin}/key"`)
+  fakeCommand(bin, 'nc')
+  const result = spawnSync('bash', ['-e', '-c', step.run ?? ''], {
+    env: { PATH: `${bin}:${process.env.PATH}`, GITHUB_ENV: `${bin}/github_env`, ...env },
+    encoding: 'utf8',
+  })
+  expect(result.status, result.stderr).toBe(0)
+  let key = ''
+  try {
+    key = readFileSync(`${bin}/key`, 'utf8').trim()
+  } catch {
+    // the reachability step loads no key
+  }
+  return { key, nc: calls(bin, 'nc') }
+}
+
+const hostSecrets = {
+  PROD_SSH_KEY: 'aws-key',
+  PROD_VPN_IP: 'aws-host.invalid',
+  PROD_SRV_SSH_KEY: 'srv-key',
+  PROD_SRV_VPN_IP: 'srv-host.invalid',
+}
+
+// Both workflows: target picks the host in the guard; the srv secrets are chosen in shell, never with ||.
+function expectTargetWiring(text: string, workflow: Workflow, mainJob: string) {
+  expect(workflow.on.workflow_dispatch?.inputs.target).toEqual({
+    description: expect.any(String),
+    required: true,
+    type: 'choice',
+    options: ['aws', 'srv'],
+    default: 'aws',
+  })
+  const guard = workflow.jobs.guard
+  expect(guard.steps.find((step) => step.id === 'inputs')?.env?.TARGET).toBe('${{ inputs.target }}')
+  expect(guard.outputs?.destination).toBe('${{ steps.inputs.outputs.destination }}')
+
+  const preflight = workflow.jobs.preflight.steps.find((step) => runs(step, 'deploy/prod_preflight.sh'))
+  expect(preflight?.env).toMatchObject({
+    PROD_SRV_SSH_KEY: '${{ secrets.PROD_SRV_SSH_KEY }}',
+    PROD_SRV_VPN_IP: '${{ secrets.PROD_SRV_VPN_IP }}',
+    DESTINATION: '${{ needs.guard.outputs.destination }}',
+  })
+  for (const line of text.split('\n').filter((candidate) => candidate.includes('PROD_SRV_'))) {
+    expect(line).not.toContain('||')
+  }
+
+  const message = workflow.jobs.notify.steps.find((step) => step.id === 'message')
+  expect(message?.env?.WHERE).toBe("${{ needs.guard.outputs.destination || 'prod' }}")
+
+  const main = workflow.jobs[mainJob]
+  const key = named(main, 'Load the prod SSH key')
+  const reach = named(main, 'Check that prod is reachable over the VPN')
+  expect(runHostStep(key, { ...hostSecrets, DESTINATION: 'prod' }).key).toBe('aws-key')
+  expect(runHostStep(key, { ...hostSecrets, DESTINATION: 'prod-srv' }).key).toBe('srv-key')
+  expect(runHostStep(reach, { ...hostSecrets, DESTINATION: 'prod' }).nc).toEqual(['-z -w 5 aws-host.invalid 22'])
+  expect(runHostStep(reach, { ...hostSecrets, DESTINATION: 'prod-srv' }).nc).toEqual(['-z -w 5 srv-host.invalid 22'])
+}
 
 function needs(job: Job): string[] {
   return ([] as string[]).concat(job.needs ?? [])
@@ -92,9 +162,9 @@ function expectProdShape(text: string, workflow: Workflow, mainJob: string, guar
 describe('Kamal Deploy workflow', () => {
   const { text, workflow } = load('kamal-deploy.yml')
 
-  it('is dispatched with environment, version, an optional source_sha and confirm', () => {
+  it('is dispatched with environment, target, version, an optional source_sha and confirm', () => {
     const inputs = workflow.on.workflow_dispatch?.inputs ?? {}
-    expect(Object.keys(inputs)).toEqual(['environment', 'version', 'source_sha', 'confirm'])
+    expect(Object.keys(inputs)).toEqual(['environment', 'target', 'version', 'source_sha', 'confirm'])
     expect(inputs.environment).toMatchObject({ type: 'choice', options: ['prod'] })
     for (const name of ['environment', 'version', 'confirm']) expect(inputs[name].required).toBe(true)
     expect(inputs.source_sha).toMatchObject({ required: false, type: 'string' })
@@ -123,8 +193,7 @@ describe('Kamal Deploy workflow', () => {
     expect(outputs.version).toContain('steps.tag.outputs.version')
     expect(outputs.source_sha).toBeDefined()
     expect(Object.keys(workflow.jobs.deploy.env ?? {})).toContain('SOURCE_SHA')
-    const step = workflow.jobs.deploy.steps.find((candidate) => runs(candidate, 'deploy/deploy.sh prod'))
-    expect(Object.keys(step?.env ?? {})).toContain('MIRROR')
+    expect(Object.keys(named(workflow.jobs.deploy, 'Deploy with Kamal').env ?? {})).toContain('MIRROR')
   })
 
   it('guards first, never builds, and reaches prod only over the VPN', () => {
@@ -142,7 +211,7 @@ describe('Kamal Deploy workflow', () => {
     const steps = workflow.jobs.deploy.steps
     const promote = indexOf(steps, (step) => runs(step, 'deploy/promote.sh'))
     const up = indexOf(steps, (step) => step.uses === vpnUp)
-    const deploy = indexOf(steps, (step) => runs(step, 'deploy/deploy.sh prod'))
+    const deploy = indexOf(steps, (step) => step.name === 'Deploy with Kamal')
     expect(promote).toBeLessThan(up)
     expect(up).toBeLessThan(deploy)
   })
@@ -154,10 +223,29 @@ describe('Kamal Deploy workflow', () => {
     expect(tag).toBeLessThan(indexOf(steps, (step) => runs(step, 'deploy/main_commit_check.sh')))
   })
 
-  it('deploys the release tag, which deploy.sh checks again, with the backend read token', () => {
-    const step = workflow.jobs.deploy.steps.find((candidate) => runs(candidate, 'deploy/deploy.sh prod'))
-    expect(step?.run).toContain('deploy/deploy.sh prod "$TAG"')
-    expect(Object.keys(step?.env ?? {})).toEqual(expect.arrayContaining(['GH_TOKEN', 'GH_REPO', 'BE_REPO_TOKEN']))
+  it('deploys the release tag to the guarded destination, which deploy.sh checks again, with the backend read token', () => {
+    const step = named(workflow.jobs.deploy, 'Deploy with Kamal')
+    expect(step.run).toContain('bash deploy/deploy.sh "$DESTINATION" "$TAG"')
+    expect(workflow.jobs.deploy.env?.DESTINATION).toBe('${{ needs.guard.outputs.destination }}')
+    expect(Object.keys(step.env ?? {})).toEqual(
+      expect.arrayContaining(['GH_TOKEN', 'GH_REPO', 'BE_REPO_TOKEN', 'PROD_VPN_IP', 'PROD_SRV_VPN_IP']),
+    )
+  })
+
+  it('takes a target and picks the host secrets in shell', () => {
+    expectTargetWiring(text, workflow, 'deploy')
+  })
+
+  it('watches the guarded destination for the length release_watch.sh picks', () => {
+    const watch = workflow.jobs['release-watch']
+    const step = watch.steps.find((candidate) => runs(candidate, 'deploy/release_watch.sh'))
+    expect(step?.env).toMatchObject({
+      DESTINATION: '${{ needs.guard.outputs.destination }}',
+      PROD_SRV_VPN_IP: '${{ secrets.PROD_SRV_VPN_IP }}',
+    })
+    for (const env of [watch.env, ...watch.steps.map((candidate) => candidate.env)]) {
+      expect(Object.keys(env ?? {})).not.toContain('RELEASE_WATCH_SECONDS')
+    }
   })
 
   it('names the release secrets in its preflight; the backend read token is optional', () => {
@@ -231,9 +319,9 @@ describe('Kamal Deploy workflow', () => {
 describe('Kamal Manage workflow', () => {
   const { text, workflow } = load('kamal-manage.yml')
 
-  it('is dispatched with an action and optional version and confirm', () => {
+  it('is dispatched with an action, a target and optional version and confirm', () => {
     const inputs = workflow.on.workflow_dispatch?.inputs ?? {}
-    expect(Object.keys(inputs)).toEqual(['action', 'version', 'confirm'])
+    expect(Object.keys(inputs)).toEqual(['action', 'target', 'version', 'confirm'])
     expect(inputs.action).toMatchObject({
       type: 'choice',
       options: ['status', 'logs', 'restart', 'rollback', 'remove'],
@@ -249,13 +337,22 @@ describe('Kamal Manage workflow', () => {
   it('runs rollback and the other actions through the scripts inside the VPN window', () => {
     const steps = workflow.jobs.manage.steps
     const up = indexOf(steps, (step) => step.uses === vpnUp)
-    const action = indexOf(steps, (step) => runs(step, 'deploy/rollback.sh prod') && runs(step, 'deploy/manage.sh'))
+    const action = indexOf(steps, (step) => step.name === 'Run the action with Kamal')
     expect(up).toBeLessThan(action)
+    expect(steps[action].run).toContain('bash deploy/rollback.sh "$DESTINATION" "${SHA:-$VERSION}"')
+    expect(steps[action].run).toContain('bash deploy/manage.sh "$ACTION" "$DESTINATION"')
+    expect(workflow.jobs.manage.env?.DESTINATION).toBe('${{ needs.guard.outputs.destination }}')
   })
 
   it('passes the typed rollback confirmation and the resolved version to the rollback script', () => {
-    const step = workflow.jobs.manage.steps.find((candidate) => runs(candidate, 'deploy/rollback.sh prod'))
-    expect(Object.keys(step?.env ?? {})).toEqual(expect.arrayContaining(['ROLLBACK_CONFIRM', 'VERSION', 'SHA']))
+    const step = named(workflow.jobs.manage, 'Run the action with Kamal')
+    expect(Object.keys(step.env ?? {})).toEqual(
+      expect.arrayContaining(['ROLLBACK_CONFIRM', 'VERSION', 'SHA', 'PROD_VPN_IP', 'PROD_SRV_VPN_IP']),
+    )
+  })
+
+  it('takes a target and picks the host secrets in shell', () => {
+    expectTargetWiring(text, workflow, 'manage')
   })
 
   it('names each run after its action, so prod rollbacks can be counted', () => {

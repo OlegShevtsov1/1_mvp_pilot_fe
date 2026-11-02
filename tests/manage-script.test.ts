@@ -95,4 +95,50 @@ describe('deploy/manage.sh', () => {
     const result = run(['restart'])
     expect(result.stdout + result.stderr).not.toContain('SECRET-SENTINEL')
   })
+
+  describe('on the srv host (prod-srv)', () => {
+    const srv = { PROD_VPN_IP: '', PROD_SRV_VPN_IP: 'srv-host.invalid' }
+
+    it('status and logs use the srv destination', () => {
+      expect(run(['status', 'prod-srv'], srv).status).toBe(0)
+      expect(run(['logs', 'prod-srv'], srv).status).toBe(0)
+      expect(calls(bin, 'kamal')).toEqual([
+        'details -d prod-srv',
+        'app version -d prod-srv',
+        'app logs -d prod-srv --lines 200',
+      ])
+    })
+
+    it('restart boots the running version and waits over the VPN', () => {
+      const result = run(['restart', 'prod-srv'], srv)
+      expect(result.status, result.stderr).toBe(0)
+      expect(calls(bin, 'kamal')).toEqual([
+        'app version -d prod-srv -q',
+        `app boot -d prod-srv --version ${prodVersion}`,
+      ])
+      const health = calls(bin, 'curl').find((call) => call.endsWith('/health'))
+      expect(health).toContain(`--connect-to app.${projectEnv().PROJECT_ZONE}:80:srv-host.invalid:8091`)
+    })
+
+    it('refuses remove without calling Kamal', () => {
+      const result = run(['remove', 'prod-srv'], srv)
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('remove is refused on prod-srv')
+      expect(calls(bin, 'kamal')).toEqual([])
+    })
+
+    it('names a missing PROD_SRV_VPN_IP without calling Kamal', () => {
+      const result = run(['status', 'prod-srv'], { PROD_SRV_VPN_IP: '' })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('PROD_SRV_VPN_IP')
+      expect(calls(bin, 'kamal')).toEqual([])
+    })
+  })
+
+  it('refuses any other destination without calling Kamal', () => {
+    const result = run(['status', 'dev'], { DEV_HOST: 'dev-host.invalid' })
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain("unknown destination 'dev'")
+    expect(calls(bin, 'kamal')).toEqual([])
+  })
 })

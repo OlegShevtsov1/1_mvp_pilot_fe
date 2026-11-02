@@ -24,7 +24,7 @@ describe('deploy/prod_guard.sh', () => {
   it('deploy accepts a release tag', () => {
     const result = deploy()
     expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout).toBe(`tag=${tag}\n`)
+    expect(result.stdout).toBe(`tag=${tag}\ndestination=prod\n`)
   })
 
   it.each([sha, `sha-${sha}`])('deploy refuses the commit sha %j: prod deploys only a release tag', (version) => {
@@ -53,7 +53,7 @@ describe('deploy/prod_guard.sh', () => {
   it('mirror deploy prints the tag and the primary source_sha, naming the mode', () => {
     const result = deploy({ MIRROR: 'true', SOURCE_SHA: sha })
     expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout).toBe(`tag=${tag}\nsource_sha=${sha}\n`)
+    expect(result.stdout).toBe(`tag=${tag}\nsource_sha=${sha}\ndestination=prod\n`)
     expect(result.stderr).toContain('mode: mirror')
   })
 
@@ -74,14 +74,14 @@ describe('deploy/prod_guard.sh', () => {
   it('primary deploy names its mode and prints only the tag', () => {
     const result = deploy()
     expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout).toBe(`tag=${tag}\n`)
+    expect(result.stdout).toBe(`tag=${tag}\ndestination=prod\n`)
     expect(result.stderr).toContain('mode: primary')
   })
 
   it.each(['status', 'logs'])('manage %s needs no confirm', (action) => {
     const result = guard('manage', { ACTION: action })
     expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout).toBe('version=\nsha=\n')
+    expect(result.stdout).toBe('version=\nsha=\ndestination=prod\n')
   })
 
   it('manage restart needs confirm=prod', () => {
@@ -98,13 +98,13 @@ describe('deploy/prod_guard.sh', () => {
     expect(noVersion.stderr).toContain('rollback needs a version')
     const result = guard('manage', { ACTION: 'rollback', CONFIRM: 'ROLLBACK-prod', VERSION: `sha-${sha}` })
     expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout).toBe(`version=sha-${sha}\nsha=${sha}\n`)
+    expect(result.stdout).toBe(`version=sha-${sha}\nsha=${sha}\ndestination=prod\n`)
   })
 
   it('manage rollback accepts prod-previous', () => {
     const result = guard('manage', { ACTION: 'rollback', CONFIRM: 'ROLLBACK-prod', VERSION: 'prod-previous' })
     expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout).toBe('version=prod-previous\nsha=\n')
+    expect(result.stdout).toBe('version=prod-previous\nsha=\ndestination=prod\n')
   })
 
   it.each(['abc', 'v1.2.3', 'prod-current'])('manage rollback refuses the version %j', (version) => {
@@ -124,6 +124,54 @@ describe('deploy/prod_guard.sh', () => {
     const result = guard('manage', { ACTION: 'setup', CONFIRM: 'prod' })
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('unknown action')
+  })
+
+  it.each(['aws', ''])('target %j deploys to the AWS host', (target) => {
+    expect(deploy({ TARGET: target }).stdout).toBe(`tag=${tag}\ndestination=prod\n`)
+    expect(guard('manage', { ACTION: 'status', TARGET: target }).stdout).toBe('version=\nsha=\ndestination=prod\n')
+  })
+
+  it('target srv deploys to prod-srv under the same dual control', () => {
+    const result = deploy({ TARGET: 'srv' })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toBe(`tag=${tag}\ndestination=prod-srv\n`)
+  })
+
+  it.each([
+    [{ CONFIRM: 'yes' }, "confirm must be exactly 'prod'"],
+    [{ REF: 'refs/heads/develop' }, 'prod runs only from main'],
+    [{ VERSION: sha }, 'prod deploys only a release tag'],
+  ])('target srv still refuses %j', (env, message) => {
+    const result = deploy({ TARGET: 'srv', ...env })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(message)
+    expect(result.stdout).toBe('')
+  })
+
+  it('refuses an unknown target', () => {
+    const result = deploy({ TARGET: 'gcp' })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("target must be aws or srv (got 'gcp')")
+    expect(result.stdout).toBe('')
+  })
+
+  it('manage rollback on srv takes prod-srv-previous or a sha, never the AWS prod-previous', () => {
+    const srv = { ACTION: 'rollback', CONFIRM: 'ROLLBACK-prod', TARGET: 'srv' }
+    expect(guard('manage', { ...srv, VERSION: 'prod-srv-previous' }).stdout).toBe(
+      'version=prod-srv-previous\nsha=\ndestination=prod-srv\n',
+    )
+    expect(guard('manage', { ...srv, VERSION: sha }).stdout).toBe(`version=sha-${sha}\nsha=${sha}\ndestination=prod-srv\n`)
+    const aws = guard('manage', { ...srv, VERSION: 'prod-previous' })
+    expect(aws.status).toBe(1)
+    expect(aws.stderr).toContain('version must be prod-srv-previous or a 40-hex git sha')
+    expect(guard('manage', { ACTION: 'rollback', CONFIRM: 'ROLLBACK-prod', VERSION: 'prod-srv-previous' }).status).toBe(1)
+  })
+
+  it('manage remove is refused on srv even with the confirm', () => {
+    const result = guard('manage', { ACTION: 'remove', CONFIRM: 'remove-prod', TARGET: 'srv' })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('remove is refused on srv')
+    expect(result.stdout).toBe('')
   })
 
   it('needs a mode', () => {

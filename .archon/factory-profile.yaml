@@ -8,6 +8,7 @@ stack:
   test_command: "npm test"
   lint_command: "npm run lint"
   build_command: "npm run build"
+  flaky_patterns: ["tokenStore"]
 # Factory PRs go to develop (decision 27); release and hotfix PRs into main are the operator's.
 repo:
   remote: "origin"

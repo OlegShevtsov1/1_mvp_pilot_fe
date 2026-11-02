@@ -28,7 +28,7 @@ function fakeCurl() {
   exit 0
 fi
 case "\${@: -1}" in
-  https://app.${zone}/health) [ ! -f "${bin}/health-down" ] || exit 22; echo ok ;;
+  https://app.${zone}/health | http://app.${zone}/health) [ ! -f "${bin}/health-down" ] || exit 22; echo ok ;;
   *) exit 22 ;;
 esac`,
   )
@@ -112,6 +112,38 @@ describe('deploy/release_watch.sh', () => {
 
   it('needs a tag', () => {
     expect(run('deploy/release_watch.sh', []).status).toBe(1)
+  })
+
+  it('on srv checks the srv proxy over the VPN, not the public URL', () => {
+    const result = run('deploy/release_watch.sh', ['v0.1.0'], { DESTINATION: 'prod-srv', PROD_SRV_VPN_IP: 'srv-host.invalid' })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('✅ release-watch v0.1.0 on srv: ')
+    const health = calls(bin, 'curl').filter((call) => call.endsWith('/health'))
+    expect(health.length).toBeGreaterThan(0)
+    for (const call of health) {
+      expect(call).toContain(`--connect-to app.${zone}:80:srv-host.invalid:8091`)
+      expect(call).toContain('X-Forwarded-Proto: https')
+      expect(call.endsWith(`http://app.${zone}/health`)).toBe(true)
+    }
+  })
+
+  it('on srv watches 3 minutes by default', () => {
+    fakeCommand(bin, 'sleep')
+    const result = run('deploy/release_watch.sh', ['v0.1.0'], {
+      DESTINATION: 'prod-srv',
+      PROD_SRV_VPN_IP: 'srv-host.invalid',
+      RELEASE_WATCH_SECONDS: '',
+      RELEASE_WATCH_POLL_SECONDS: '',
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(calls(bin, 'curl').filter((call) => call.endsWith('/health'))).toHaveLength(7)
+    expect(result.stdout).toContain('(3 min)')
+  })
+
+  it('refuses a destination other than prod or prod-srv', () => {
+    const result = run('deploy/release_watch.sh', ['v0.1.0'], { DESTINATION: 'dev' })
+    expect(result.status).toBe(1)
+    expect(calls(bin, 'curl')).toEqual([])
   })
 })
 

@@ -24,6 +24,23 @@ Minimum backend version: v0.3.0
 
 ### Security
 
+## [0.5.0] - 2026-11-02
+
+Minimum backend version: v0.3.0
+
+### Added
+
+- Kamal Deploy and Kamal Manage take a `target` input: `aws` (the default) is unchanged; `srv` deploys, operates
+  and watches the same release on the on-prem srv host with `config/deploy.prod-srv.yml` and the ECR tags
+  `prod-srv-current`/`prod-srv-previous` (PILOT-554).
+
+### Fixed
+
+- `bin/wait-dev-deploy` (the factory's deploy step) takes the sdlc v0.7.0 template version: a run of the commit
+  that deployed wins over a skipped duplicate, a running duplicate is still waited for, a run cancelled for a newer
+  develop commit counts as deployed when that newer commit contains it and deployed, and when every run was skipped
+  Front CI decides: green exits 3 "dev auto-deploy disabled", red exits 1, pending keeps waiting (PILOT-494).
+
 ## [0.4.0] - 2026-10-30
 
 Minimum backend version: v0.3.0

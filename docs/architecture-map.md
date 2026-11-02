@@ -68,7 +68,7 @@ C4Container
 | Credentials | `src/auth/credentials.ts` | app | `src/routes/SignUp.tsx:3` | `validateSignUp`, `signUp` (`createUser` through `postJson`) and `signIn` (`createToken`, password grant through `requestToken`), mapped to a result per contract answer; `signOut` (`signOut`) through the API client |
 | Projects API | `src/api/projects.ts` | app | `src/routes/Dashboard.tsx:5` | `validateProject`, `listProjects`, `saveProject` (`createProject`, `updateProject`), `deleteProject`, `validateTask`, `createTask` (`createTask`) and `changeTaskStatus` (`updateTask`) through the API client, mapped to a result per contract answer |
 | Token store | `src/auth/tokenStore.ts` | infra | `src/App.tsx:38` | `createTokenStore`: the token pair in localStorage, never throws; a pair storage refuses lasts for the page |
-| Deploy (ops) | `deploy/`, `config/deploy*.yml`, `.github/workflows/` | ops | `deploy/lib.sh:36` | Kamal deploy, rollback, promotion and guards; not part of the bundle |
+| Deploy (ops) | `deploy/`, `config/deploy*.yml`, `.github/workflows/` | ops | `deploy/lib.sh:48` | Kamal deploy, rollback, promotion and guards; not part of the bundle |
 
 ## Conventions (cited — the rules a new feature must match)
 

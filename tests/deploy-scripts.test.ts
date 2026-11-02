@@ -26,6 +26,7 @@ function run(script: string, args: string[], env: Record<string, string> = {}) {
     PATH: `${bin}:${process.env.PATH}`,
     DEV_HOST: 'dev-host.invalid',
     PROD_VPN_IP: 'prod-host.invalid',
+    PROD_SRV_VPN_IP: 'srv-host.invalid',
     SENTRY_DSN: 'SECRET-SENTINEL',
     ECR_REGISTRY: 'registry.invalid',
     KAMAL_REGISTRY_PASSWORD: 'SECRET-SENTINEL2',
@@ -48,7 +49,7 @@ beforeEach(() => {
     bin,
     'curl',
     `case "\${@: -1}" in
-  https://${zone}/health) echo '{"status":"ok","release":"${beSha}"}' ;;
+  https://${zone}/health | http://${zone}/health) echo '{"status":"ok","release":"${beSha}"}' ;;
   */health) echo ok ;;
   */config.js) cat "${configJs}" ;;
   *) exit 22 ;;
@@ -487,6 +488,77 @@ esac`,
       const result = run('deploy/rollback.sh', ['prod', 'prod-previous'], { ROLLBACK_CONFIRM: 'ROLLBACK-prod' })
       expect(result.status).toBe(1)
       expect(result.stderr).toContain('there is no prod-previous yet')
+      expect(calls(bin, 'kamal')).toEqual([])
+    })
+  })
+
+  describe('on the srv host (prod-srv)', () => {
+    const srvProxy = 'srv-host.invalid:8091'
+    const srvCalls = () => calls(bin, 'curl').filter((call) => call.includes('/health') || call.includes('/config.js'))
+
+    it('deploys the promoted image with the srv destination and checks it over the VPN', () => {
+      const result = run('deploy/deploy.sh', ['prod-srv', tag])
+      expect(result.status, result.stderr).toBe(0)
+      expect(calls(bin, 'kamal')).toEqual([`deploy -d prod-srv --skip-push --version ${prodVersion}`])
+      expect(result.stdout).toContain(`ready: ${prodVersion}`)
+      const app = srvCalls().filter((call) => call.includes(`app.${zone}`))
+      expect(app.some((call) => call.endsWith(`http://app.${zone}/config.js`))).toBe(true)
+      for (const call of app) {
+        expect(call).toContain(`--connect-to app.${zone}:80:${srvProxy}`)
+        expect(call).toContain('X-Forwarded-Proto: https')
+      }
+      expect(calls(bin, 'curl').join('\n')).not.toContain(prodUrl)
+      expectNoLeaks(result)
+    })
+
+    it('checks the release order against the backend on the srv host', () => {
+      const result = run('deploy/deploy.sh', ['prod-srv', tag])
+      expect(result.status, result.stderr).toBe(0)
+      const backend = calls(bin, 'curl').find((call) => call.endsWith(`http://${zone}/health`))
+      expect(backend).toContain(`--connect-to ${zone}:80:${srvProxy}`)
+      expect(calls(bin, 'curl').join('\n')).not.toContain(`https://${zone}/health`)
+    })
+
+    it('moves prod-srv-current and prod-srv-previous, never the AWS tags', () => {
+      const aws = seedImage(bin, 'prod-current', { layers: ['sha256:aws'], service: `${name}-fe` })
+      const old = seedImage(bin, 'prod-srv-current', { layers: ['sha256:old'], service: `${name}-fe` })
+      expect(run('deploy/deploy.sh', ['prod-srv', tag]).status).toBe(0)
+      expect(registryDigest(bin, 'prod-srv-current')).toBe(registryDigest(bin, prodVersion))
+      expect(registryDigest(bin, 'prod-srv-previous')).toBe(old)
+      expect(registryDigest(bin, 'prod-current')).toBe(aws)
+      expect(registryDigest(bin, 'prod-previous')).toBeUndefined()
+    })
+
+    it('names a missing PROD_SRV_VPN_IP before ECR or Kamal, even with the AWS host set', () => {
+      const result = run('deploy/deploy.sh', ['prod-srv', tag], { PROD_SRV_VPN_IP: '' })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain('PROD_SRV_VPN_IP')
+      expect(calls(bin, 'crane')).toEqual([])
+      expect(calls(bin, 'kamal')).toEqual([])
+    })
+
+    it('rolls back to prod-srv-previous and rotates only the srv tags', () => {
+      const older = `prod-sha-${'b'.repeat(40)}`
+      const olderDigest = seedImage(bin, older, { layers: ['sha256:older'], service: `${name}-fe` })
+      seedImage(bin, 'prod-srv-previous', { layers: ['sha256:older'], service: `${name}-fe` })
+      const current = seedImage(bin, 'prod-srv-current', { layers: ['sha256:newer'], service: `${name}-fe` })
+      const aws = seedImage(bin, 'prod-current', { layers: ['sha256:aws'], service: `${name}-fe` })
+      servedConfig(older, 'prod')
+      const result = run('deploy/rollback.sh', ['prod-srv', 'prod-srv-previous'], { ROLLBACK_CONFIRM: 'ROLLBACK-prod' })
+      expect(result.status, result.stderr).toBe(0)
+      expect(calls(bin, 'kamal')).toEqual([`rollback -d prod-srv ${older}`])
+      expect(registryDigest(bin, 'prod-srv-current')).toBe(olderDigest)
+      expect(registryDigest(bin, 'prod-srv-previous')).toBe(current)
+      expect(registryDigest(bin, 'prod-current')).toBe(aws)
+    })
+
+    it('refuses the AWS prod-previous and a rollback without ROLLBACK-prod', () => {
+      const aws = run('deploy/rollback.sh', ['prod-srv', 'prod-previous'], { ROLLBACK_CONFIRM: 'ROLLBACK-prod' })
+      expect(aws.status).toBe(1)
+      expect(run('deploy/promote.sh', [version]).status).toBe(0)
+      const unconfirmed = run('deploy/rollback.sh', ['prod-srv', sha], { ROLLBACK_CONFIRM: 'prod' })
+      expect(unconfirmed.status).toBe(1)
+      expect(unconfirmed.stderr).toContain('typed confirmation ROLLBACK-prod')
       expect(calls(bin, 'kamal')).toEqual([])
     })
   })

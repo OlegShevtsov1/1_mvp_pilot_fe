@@ -9,6 +9,12 @@ name: Kamal Deploy
 # it (the image it replaces becomes prod-previous). Then release-watch watches prod health and new
 # GlitchTip issues for 10 minutes and reports ✅/❌; it never acts on prod.
 #
+# Target: aws (the default) deploys to the AWS instance exactly as above. srv deploys the same
+# release to the on-prem srv host with config/deploy.prod-srv.yml (deploy/deploy.sh prod-srv) and
+# moves prod-srv-current/prod-srv-previous instead; until the cut-over its health checks and
+# release-watch (3 minutes there) go over the VPN straight to that host's shared proxy. See README
+# "Prod on the on-prem srv host".
+#
 # From the public mirror (vars.MIRROR == 'true', decision 43) the run also takes source_sha, the
 # primary commit of the tag: the guard checks the tag on the mirror as above, then requires that
 # MIRROR_SOURCE.json records exactly that (version, source_sha) pair, and the image promoted and
@@ -24,6 +30,12 @@ on:
         required: true
         type: choice
         options: [prod]
+      target:
+        description: Prod host - aws (the AWS instance) or srv (the on-prem srv host, until the cut-over)
+        required: true
+        type: choice
+        options: [aws, srv]
+        default: aws
       version:
         description: Release tag vX.Y.Z (annotated, on this repository's main) whose commit Dev Deploy built
         required: true
@@ -56,6 +68,7 @@ jobs:
       version: ${{ steps.source.outputs.version || steps.tag.outputs.version }}
       source_sha: ${{ steps.inputs.outputs.source_sha }}
       sha: ${{ steps.tag.outputs.sha }}
+      destination: ${{ steps.inputs.outputs.destination }}
     steps:
       - uses: actions/checkout@v7
 
@@ -68,6 +81,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           MIRROR: ${{ vars.MIRROR }}
           SOURCE_SHA: ${{ inputs.source_sha }}
+          TARGET: ${{ inputs.target }}
         run: bash deploy/prod_guard.sh deploy >> "$GITHUB_OUTPUT"
 
       - name: Resolve the release tag
@@ -108,6 +122,9 @@ jobs:
           VPN_CI_OVPN: ${{ secrets.VPN_CI_OVPN }}
           PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
           PROD_VPN_IP: ${{ secrets.PROD_VPN_IP }}
+          PROD_SRV_SSH_KEY: ${{ secrets.PROD_SRV_SSH_KEY }}
+          PROD_SRV_VPN_IP: ${{ secrets.PROD_SRV_VPN_IP }}
+          DESTINATION: ${{ needs.guard.outputs.destination }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           TELEGRAM_PILOT_PROD_ALERTS_BOT_TOKEN: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_BOT_TOKEN }}
           TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID }}
@@ -190,6 +207,7 @@ jobs:
       TAG: ${{ needs.guard.outputs.tag }}
       VERSION: ${{ needs.guard.outputs.version }}
       SOURCE_SHA: ${{ needs.guard.outputs.source_sha }}
+      DESTINATION: ${{ needs.guard.outputs.destination }}
     steps:
       - uses: actions/checkout@v7
 
@@ -244,9 +262,12 @@ jobs:
       - name: Load the prod SSH key
         env:
           PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          PROD_SRV_SSH_KEY: ${{ secrets.PROD_SRV_SSH_KEY }}
         run: |
+          key=$PROD_SSH_KEY
+          if [ "$DESTINATION" = prod-srv ]; then key=$PROD_SRV_SSH_KEY; fi
           eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$PROD_SSH_KEY" | ssh-add - 2>/dev/null
+          printf '%s\n' "$key" | ssh-add - 2>/dev/null
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
@@ -264,9 +285,12 @@ jobs:
       - name: Check that prod is reachable over the VPN
         env:
           PROD_VPN_IP: ${{ secrets.PROD_VPN_IP }}
+          PROD_SRV_VPN_IP: ${{ secrets.PROD_SRV_VPN_IP }}
         run: |
+          host=$PROD_VPN_IP
+          if [ "$DESTINATION" = prod-srv ]; then host=$PROD_SRV_VPN_IP; fi
           for attempt in 1 2 3; do
-            if nc -z -w 5 "$PROD_VPN_IP" 22; then
+            if nc -z -w 5 "$host" 22; then
               echo "prod SSH is reachable over the VPN"
               exit 0
             fi
@@ -279,6 +303,7 @@ jobs:
       - name: Deploy with Kamal
         env:
           PROD_VPN_IP: ${{ secrets.PROD_VPN_IP }}
+          PROD_SRV_VPN_IP: ${{ secrets.PROD_SRV_VPN_IP }}
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
@@ -288,7 +313,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           BE_REPO_TOKEN: ${{ secrets.BE_REPO_READ_TOKEN }}
           MIRROR: ${{ vars.MIRROR }}
-        run: bash deploy/deploy.sh prod "$TAG"
+        run: bash deploy/deploy.sh "$DESTINATION" "$TAG"
 
       - if: always()
         uses: ./infra-helpers/.github/actions/vpn-down
@@ -322,10 +347,11 @@ jobs:
           VPN_CHECK: ${{ needs.vpn-up-check.result }}
           DEPLOY: ${{ needs.deploy.result }}
           VERSION: ${{ needs.guard.outputs.tag || inputs.version }}
+          WHERE: ${{ needs.guard.outputs.destination || 'prod' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ "$DEPLOY" = success ]; then
-            echo "text=✅ Kamal Deploy prod $VERSION succeeded: $RUN_URL" >> "$GITHUB_OUTPUT"
+            echo "text=✅ Kamal Deploy $WHERE $VERSION succeeded: $RUN_URL" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "$GUARD" != success ]; then
@@ -337,7 +363,7 @@ jobs:
           else
             stage="deploy"
           fi
-          echo "text=❌ Kamal Deploy prod failed at $stage: $RUN_URL" >> "$GITHUB_OUTPUT"
+          echo "text=❌ Kamal Deploy $WHERE failed at $stage: $RUN_URL" >> "$GITHUB_OUTPUT"
 
       - uses: ./infra-helpers/.github/actions/notify-telegram
         with:
@@ -348,11 +374,11 @@ jobs:
           TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID }}
           TELEGRAM_PILOT_PROD_ALERTS_THREAD_ID: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_THREAD_ID }}
 
-  # Health of https://app.<zone> and new GlitchTip issues of <project>-fe-prod (deploy/release_watch.sh,
-  # stops at the first problem). GlitchTip is reachable only over the VPN, so this job holds the
-  # shared VPN lock for up to 10 minutes.
+  # Health of the app and new GlitchTip issues of <project>-fe-prod (deploy/release_watch.sh, stops
+  # at the first problem). GlitchTip is reachable only over the VPN, so this job holds the shared VPN
+  # lock for the whole watch: 10 minutes on aws, 3 on srv.
   release-watch:
-    name: Release watch (10 min)
+    name: Release watch
     needs: [guard, deploy]
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
     environment: prod
@@ -393,6 +419,8 @@ jobs:
         id: watch
         env:
           TAG: ${{ needs.guard.outputs.tag }}
+          DESTINATION: ${{ needs.guard.outputs.destination }}
+          PROD_SRV_VPN_IP: ${{ secrets.PROD_SRV_VPN_IP }}
           GLITCHTIP_API_URL: ${{ secrets.GLITCHTIP_API_URL }}
           GLITCHTIP_API_TOKEN: ${{ secrets.GLITCHTIP_API_TOKEN }}
         run: bash deploy/release_watch.sh "$TAG"

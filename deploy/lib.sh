@@ -6,22 +6,34 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 KAMAL=${KAMAL:-kamal}
 ECR_REGION=us-east-1
+# The srv host's shared kamal-proxy; must equal proxy.run.http_port in config/deploy.prod-srv.yml.
+PROXY_HTTP_PORT=8091
 
 die() {
   echo "ERROR: $*" >&2
   exit 1
 }
 
-# Sets HOST_VAR (the variable holding the Kamal host), VERSION_PREFIX and DEFAULT_WAIT_SECONDS.
-# shellcheck disable=SC2034 # HOST_VAR is read by the scripts that source this file
+# Sets DESTINATION, HOST_VAR (the variable holding the Kamal host), VERSION_PREFIX,
+# DEFAULT_WAIT_SECONDS, APP_ENV_NAME (the ENV_NAME the app serves) and LIVE_TAG_PREFIX (of the ECR
+# tags <prefix>-current/-previous).
+# shellcheck disable=SC2034 # read by the scripts that source this file
 select_destination() {
-  case ${1:-} in
-    dev) HOST_VAR=DEV_HOST VERSION_PREFIX='' DEFAULT_WAIT_SECONDS=300 ;;
+  DESTINATION=${1:-} APP_ENV_NAME=prod LIVE_TAG_PREFIX=prod
+  case $DESTINATION in
+    dev) HOST_VAR=DEV_HOST VERSION_PREFIX='' DEFAULT_WAIT_SECONDS=300 APP_ENV_NAME=dev ;;
     # Kamal only runs an image labelled with its service, and Dev Deploy labels sha-<sha> for the
     # dev service, so prod runs prod-sha-<sha>: the same image re-labelled (promote_prod_image).
     prod) HOST_VAR=PROD_VPN_IP VERSION_PREFIX=prod- DEFAULT_WAIT_SECONDS=600 ;;
-    *) die "unknown destination '${1:-}' (expected: dev or prod)" ;;
+    # Prod on the srv host: the same promoted image, with its own ECR tags; prod-current and
+    # prod-previous keep naming what is live on the AWS host.
+    prod-srv) HOST_VAR=PROD_SRV_VPN_IP VERSION_PREFIX=prod- DEFAULT_WAIT_SECONDS=600 LIVE_TAG_PREFIX=prod-srv ;;
+    *) die "unknown destination '$DESTINATION' (expected: dev, prod or prod-srv)" ;;
   esac
+}
+
+is_prod() {
+  [ "$DESTINATION" = prod ] || [ "$DESTINATION" = prod-srv ]
 }
 
 require_version() {
@@ -41,11 +53,30 @@ load_project_env() {
 }
 
 # Must agree with proxy.host in config/deploy.<destination>.yml (tests/kamal-config.test.ts).
+# prod-srv is reached over the VPN (app_curl): public DNS still points at the AWS host.
 destination_url() {
   case $1 in
     dev) echo "https://app.dev.$PROJECT_ZONE" ;;
     prod) echo "https://app.$PROJECT_ZONE" ;;
+    prod-srv) echo "http://app.$PROJECT_ZONE" ;;
   esac
+}
+
+# srv_curl <host> <curl args>: curl to the srv host's shared kamal-proxy as if through the public
+# TLS terminator in front of it.
+srv_curl() {
+  local host=$1
+  shift
+  curl --connect-to "$host:80:$PROD_SRV_VPN_IP:$PROXY_HTTP_PORT" -H 'X-Forwarded-Proto: https' "$@"
+}
+
+# curl to the app of the selected destination.
+app_curl() {
+  if [ "$DESTINATION" = prod-srv ]; then
+    srv_curl "app.$PROJECT_ZONE" "$@"
+  else
+    curl "$@"
+  fi
 }
 
 require_vars() {
@@ -99,8 +130,8 @@ wait_ready() {
   local wait=${DEPLOY_WAIT_SECONDS:-$DEFAULT_WAIT_SECONDS} poll=${DEPLOY_POLL_SECONDS:-5}
   local deadline=$((SECONDS + wait)) config
   while :; do
-    if curl -fsS --max-time 10 -o /dev/null "$base_url/health" 2>/dev/null &&
-      config=$(curl -fsS --max-time 10 "$base_url/config.js" 2>/dev/null) &&
+    if app_curl -fsS --max-time 10 -o /dev/null "$base_url/health" 2>/dev/null &&
+      config=$(app_curl -fsS --max-time 10 "$base_url/config.js" 2>/dev/null) &&
       grep -qF "APP_VERSION: \"$version\"" <<<"$config" &&
       grep -qF "ENV_NAME: \"$env_name\"" <<<"$config"; then
       echo "ready: $version"
@@ -186,27 +217,28 @@ promote_prod_image() {
   fi
 }
 
-# After a ready deploy or rollback: prod-current is the live image, prod-previous the one before it.
+# After a ready deploy or rollback: <LIVE_TAG_PREFIX>-current is the live image, -previous the one
+# before it.
 rotate_prod_tags() {
   local live current
   live=$(image_digest "$1") || die "$(image_name):$1 is not in ECR, the ECR tags were not moved"
   current=$(prod_current_digest)
   if [ "$current" = "$live" ]; then
-    echo "$(image_name):prod-current is already $live"
+    echo "$(image_name):$LIVE_TAG_PREFIX-current is already $live"
     return 0
   fi
   if [ -n "$current" ]; then
-    move_tag prod-previous "$current"
+    move_tag "$LIVE_TAG_PREFIX-previous" "$current"
   fi
-  move_tag prod-current "$live"
+  move_tag "$LIVE_TAG_PREFIX-current" "$live"
 }
 
-# Prints nothing before the first prod deploy. Any other failure to read the tag stops the rotation:
-# forgiving it would skip prod-previous and still report success.
+# Prints nothing before the first deploy to the destination. Any other failure to read the tag stops
+# the rotation: forgiving it would skip <LIVE_TAG_PREFIX>-previous and still report success.
 prod_current_digest() {
   local errors digest
   errors=$(mktemp)
-  if digest=$(crane digest "$(registry_ref prod-current)" 2>"$errors"); then
+  if digest=$(crane digest "$(registry_ref "$LIVE_TAG_PREFIX-current")" 2>"$errors"); then
     rm -f "$errors"
     echo "$digest"
     return 0
@@ -216,20 +248,21 @@ prod_current_digest() {
     return 0
   fi
   rm -f "$errors"
-  die "could not read $(image_name):prod-current, the ECR tags were not moved"
+  die "could not read $(image_name):$LIVE_TAG_PREFIX-current, the ECR tags were not moved"
 }
 
-# Prints the git sha of the prod-sha-<sha> image that prod-previous points at.
+# Prints the git sha of the prod-sha-<sha> image that <LIVE_TAG_PREFIX>-previous points at.
 resolve_prod_previous() {
   local previous tag
-  previous=$(image_digest prod-previous) || die "there is no prod-previous yet (it appears after the second prod release)"
+  previous=$(image_digest "$LIVE_TAG_PREFIX-previous") ||
+    die "there is no $LIVE_TAG_PREFIX-previous yet (it appears after the second release to $DESTINATION)"
   while read -r tag; do
     if [ "$(image_digest "$tag")" = "$previous" ]; then
       echo "${tag#prod-sha-}"
       return 0
     fi
   done < <(crane ls "$ECR_REGISTRY/$(image_name)" 2>/dev/null | grep -E '^prod-sha-[0-9a-f]{40}$')
-  die "no prod-sha-<sha> tag of $(image_name) has the digest of prod-previous"
+  die "no prod-sha-<sha> tag of $(image_name) has the digest of $LIVE_TAG_PREFIX-previous"
 }
 
 # A prod rollback needs the typed confirmation: ROLLBACK_CONFIRM, or a prompt on a terminal.

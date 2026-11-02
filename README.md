@@ -407,7 +407,7 @@ digest is the same. On prod, `/config.js` shows
 `APP_VERSION: "prod-sha-<git sha>"`, and errors carry it as their release.
 
 After a deploy or rollback is served, the ECR tag `prod-current` points at
-the live image, and the image it replaced becomes `prod-previous`.
+the live image on the AWS host, and the image it replaced becomes `prod-previous`.
 
 ### Kamal Deploy and Kamal Manage workflows
 
@@ -500,6 +500,58 @@ version first with `kamal app version -d <dev|prod> -q` and always pass it:
 kamal app start -d prod --version prod-sha-<full git sha>
 kamal app start -d dev --version sha-<full git sha>
 ```
+
+### Prod on the on-prem srv host (`target=srv`)
+
+To save cost, Kamal Deploy and Kamal Manage can send prod to the on-prem
+server that already runs dev (the srv host) instead of the AWS instance, as
+the backend can. The input `target` is `aws` by default, which behaves exactly
+as described above; `target=srv` deploys and operates the same release under
+the same dual control (`main` only, environment `prod`, `confirm=prod`, an
+annotated release tag).
+
+- Config: the Kamal destination `prod-srv`
+  ([`config/deploy.prod-srv.yml`](config/deploy.prod-srv.yml)), merged onto
+  `config/deploy.yml` like the others. It differs from `config/deploy.prod.yml`
+  only in the host (`PROD_SRV_VPN_IP`), the SSH user `pilot-prod` and the
+  proxy. The service stays `pilot-fe`, so it runs the same promoted
+  `prod-sha-<git sha>` image; its containers are `pilot-fe-web-prod-srv-*`,
+  apart from dev (`pilot-fe-dev-web-dev-*`) and the other deployment on the
+  host's shared `kamal-proxy`. TLS is terminated by the public TLS terminator
+  in front of that proxy, as for dev (`ssl: false`, `forward_headers: true`).
+- ECR tags: srv moves its own `prod-srv-current` / `prod-srv-previous`;
+  `prod-current` / `prod-previous` keep meaning the AWS host. A srv rollback to
+  the previous release takes `version=prod-srv-previous`.
+- Checks: the readiness check, the release-order check (against the backend
+  on the srv host) and release-watch go over the VPN straight to the srv
+  host's proxy with the prod Host header, never through public DNS, which
+  still points at AWS. release-watch holds the shared VPN lock for its whole
+  watch, so on srv it lasts 3 minutes (7 checks) instead of 10.
+- `remove` is refused on srv (`deploy/prod_guard.sh`, `deploy/manage.sh`): the
+  host is shared with dev and another deployment.
+- Never run `kamal remove` or `kamal proxy reboot|remove` with `-d prod-srv`.
+
+```bash
+gh workflow run "Kamal Deploy" --ref main -f environment=prod -f target=srv -f version=v<X.Y.Z> -f confirm=prod
+gh workflow run "Kamal Manage" --ref main -f action=status -f target=srv
+gh workflow run "Kamal Manage" --ref main -f action=rollback -f target=srv -f version=prod-srv-previous -f confirm=ROLLBACK-prod
+
+# From a console on the VPN, with the srv address and the srv SSH key:
+PROD_SRV_VPN_IP=<srv VPN address> deploy/deploy.sh prod-srv v<X.Y.Z>
+PROD_SRV_VPN_IP=<srv VPN address> deploy/rollback.sh prod-srv prod-srv-previous|<full git sha>
+PROD_SRV_VPN_IP=<srv VPN address> deploy/manage.sh status|logs|restart prod-srv
+```
+
+Secrets (names only): environment `prod` (here and on the public mirror) gains
+`PROD_SRV_VPN_IP` and `PROD_SRV_SSH_KEY`, needed only for `target=srv`; every
+other secret is shared with aws.
+
+Pending before the first srv deploy (operator): the srv user `pilot-prod` with
+Docker access for that key and the two secrets above; the public TLS
+terminator's route for `app.pilot.up.km.ua` to the srv proxy; a check that no
+`pilot-fe-web-prod-srv-*` container exists on the srv host; the backend
+deployed to srv first (release order). DNS stays on AWS until the cut-over,
+which is switched only with the operator's explicit OK.
 
 ## Releases and hotfixes
 
@@ -620,6 +672,8 @@ GlitchTip issue appeared in the prod frontend project (read through the
 GlitchTip API over the VPN, so the shared VPN lock is held meanwhile). It
 reports ✅, or ❌ naming the new issues, to the prod alerts topic, stopping at
 the first problem. It never rolls back: that is the operator's decision.
+With `target=srv` it watches the srv host for 3 minutes instead; see
+[Prod on the on-prem srv host](#prod-on-the-on-prem-srv-host-targetsrv).
 
 ### Rollback
 

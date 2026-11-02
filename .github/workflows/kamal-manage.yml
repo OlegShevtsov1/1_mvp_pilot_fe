@@ -4,7 +4,9 @@ run-name: Kamal Manage ${{ inputs.action }}
 # Operates the prod deployment over the shared mvp VPN: status, logs, restart (deploy/manage.sh),
 # rollback to prod-previous or a given version (deploy/rollback.sh prod, which also moves the ECR
 # tags prod-current/prod-previous), and remove, which deletes only this app from the prod host: the
-# kamal-proxy there is shared with the backend.
+# kamal-proxy there is shared with the backend. target=srv operates prod on the on-prem srv host
+# instead (deploy/rollback.sh prod-srv, the prod-srv-* tags); remove is refused there, because that
+# host is shared with dev and another deployment.
 #
 # Dual control: runs only from main; restart needs confirm=prod, rollback the typed confirm
 # ROLLBACK-prod, remove needs confirm=remove-prod; the guard runs without the "prod" environment,
@@ -17,8 +19,14 @@ on:
         required: true
         type: choice
         options: [status, logs, restart, rollback, remove]
+      target:
+        description: Prod host - aws (the AWS instance) or srv (the on-prem srv host, until the cut-over)
+        required: true
+        type: choice
+        options: [aws, srv]
+        default: aws
       version:
-        description: Rollback target, prod-previous or the 40-hex git sha (optionally sha-<sha>) of an earlier prod deploy
+        description: Rollback target, prod-previous (target=srv - prod-srv-previous) or the 40-hex git sha (optionally sha-<sha>) of an earlier prod deploy
         required: false
         default: ''
         type: string
@@ -44,6 +52,7 @@ jobs:
     outputs:
       version: ${{ steps.inputs.outputs.version }}
       sha: ${{ steps.inputs.outputs.sha }}
+      destination: ${{ steps.inputs.outputs.destination }}
     steps:
       - uses: actions/checkout@v7
 
@@ -54,6 +63,7 @@ jobs:
           ACTION: ${{ inputs.action }}
           CONFIRM: ${{ inputs.confirm }}
           VERSION: ${{ inputs.version }}
+          TARGET: ${{ inputs.target }}
         run: bash deploy/prod_guard.sh manage >> "$GITHUB_OUTPUT"
 
   preflight:
@@ -71,6 +81,9 @@ jobs:
           VPN_CI_OVPN: ${{ secrets.VPN_CI_OVPN }}
           PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
           PROD_VPN_IP: ${{ secrets.PROD_VPN_IP }}
+          PROD_SRV_SSH_KEY: ${{ secrets.PROD_SRV_SSH_KEY }}
+          PROD_SRV_VPN_IP: ${{ secrets.PROD_SRV_VPN_IP }}
+          DESTINATION: ${{ needs.guard.outputs.destination }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           TELEGRAM_PILOT_PROD_ALERTS_BOT_TOKEN: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_BOT_TOKEN }}
           TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID: ${{ secrets.TELEGRAM_PILOT_PROD_ALERTS_CHAT_ID }}
@@ -143,6 +156,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    env:
+      DESTINATION: ${{ needs.guard.outputs.destination }}
     steps:
       - uses: actions/checkout@v7
 
@@ -168,7 +183,7 @@ jobs:
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # rollback moves the ECR tags prod-current/prod-previous.
+      # rollback moves the ECR tags prod-current/prod-previous (srv: prod-srv-current/prod-srv-previous).
       - name: Install crane
         env:
           CRANE_VERSION: 0.22.1
@@ -192,9 +207,12 @@ jobs:
       - name: Load the prod SSH key
         env:
           PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          PROD_SRV_SSH_KEY: ${{ secrets.PROD_SRV_SSH_KEY }}
         run: |
+          key=$PROD_SSH_KEY
+          if [ "$DESTINATION" = prod-srv ]; then key=$PROD_SRV_SSH_KEY; fi
           eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$PROD_SSH_KEY" | ssh-add - 2>/dev/null
+          printf '%s\n' "$key" | ssh-add - 2>/dev/null
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
@@ -205,9 +223,12 @@ jobs:
       - name: Check that prod is reachable over the VPN
         env:
           PROD_VPN_IP: ${{ secrets.PROD_VPN_IP }}
+          PROD_SRV_VPN_IP: ${{ secrets.PROD_SRV_VPN_IP }}
         run: |
+          host=$PROD_VPN_IP
+          if [ "$DESTINATION" = prod-srv ]; then host=$PROD_SRV_VPN_IP; fi
           for attempt in 1 2 3; do
-            if nc -z -w 5 "$PROD_VPN_IP" 22; then
+            if nc -z -w 5 "$host" 22; then
               echo "prod SSH is reachable over the VPN"
               exit 0
             fi
@@ -224,6 +245,7 @@ jobs:
           VERSION: ${{ needs.guard.outputs.version }}
           ROLLBACK_CONFIRM: ${{ inputs.confirm }}
           PROD_VPN_IP: ${{ secrets.PROD_VPN_IP }}
+          PROD_SRV_VPN_IP: ${{ secrets.PROD_SRV_VPN_IP }}
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
@@ -231,9 +253,9 @@ jobs:
           SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
         run: |
           if [ "$ACTION" = rollback ]; then
-            bash deploy/rollback.sh prod "${SHA:-$VERSION}"
+            bash deploy/rollback.sh "$DESTINATION" "${SHA:-$VERSION}"
           else
-            bash deploy/manage.sh "$ACTION"
+            bash deploy/manage.sh "$ACTION" "$DESTINATION"
           fi
 
       - if: always()
@@ -268,10 +290,11 @@ jobs:
           VPN_CHECK: ${{ needs.vpn-up-check.result }}
           MANAGE: ${{ needs.manage.result }}
           ACTION: ${{ inputs.action }}
+          WHERE: ${{ needs.guard.outputs.destination || 'prod' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ "$MANAGE" = success ]; then
-            echo "text=✅ Kamal Manage prod $ACTION succeeded: $RUN_URL" >> "$GITHUB_OUTPUT"
+            echo "text=✅ Kamal Manage $WHERE $ACTION succeeded: $RUN_URL" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "$GUARD" != success ]; then
@@ -283,7 +306,7 @@ jobs:
           else
             stage="$ACTION"
           fi
-          echo "text=❌ Kamal Manage prod $ACTION failed at $stage: $RUN_URL" >> "$GITHUB_OUTPUT"
+          echo "text=❌ Kamal Manage $WHERE $ACTION failed at $stage: $RUN_URL" >> "$GITHUB_OUTPUT"
 
       - uses: ./infra-helpers/.github/actions/notify-telegram
         with:

@@ -1,0 +1,36 @@
+<% project = File.read("config/project.env").scan(/^([A-Z_]+)=(.*)$/).to_h %>
+<% name, zone = project.fetch("PROJECT_NAME"), project.fetch("PROJECT_ZONE") %>
+# Prod on the on-prem srv host, picked by target=srv of Kamal Deploy and Kamal Manage; merged onto
+# config/deploy.yml like the other destinations. The kamal-proxy there is shared with dev and another
+# deployment: never run kamal remove or kamal proxy reboot|remove with -d prod-srv.
+service: <%= name %>-fe
+
+# PROD_SRV_VPN_IP is the srv host's mvp VPN address: a secret, never committed.
+servers:
+  web:
+    hosts:
+      - <%= ENV.fetch("PROD_SRV_VPN_IP") %>
+
+ssh:
+  user: <%= name %>-prod
+
+# The public TLS terminator in front of the shared proxy ends TLS, as for dev; the proxy trusts its
+# X-Forwarded-* headers. run holds that proxy's ports, used only if it had to be started from scratch.
+proxy:
+  ssl: false
+  host: app.<%= zone %>
+  forward_headers: true
+  run:
+    http_port: 8091
+    https_port: 8491
+
+env:
+  clear:
+    API_URL: https://<%= zone %>
+    ENV_NAME: prod
+    # Public Google OAuth client id from the GitHub environment variable GOOGLE_CLIENT_ID; never committed, empty when unset.
+    GOOGLE_CLIENT_ID: <%= ENV.fetch("GOOGLE_CLIENT_ID", "").to_json %>
+    # Public uid of the OAuth web application from the GitHub environment variable OAUTH_CLIENT_ID; empty when unset.
+    OAUTH_CLIENT_ID: <%= ENV.fetch("OAUTH_CLIENT_ID", "").to_json %>
+    # Public contact address for the privacy and terms pages from the GitHub environment variable SUPPORT_EMAIL; empty when unset.
+    SUPPORT_EMAIL: <%= ENV.fetch("SUPPORT_EMAIL", "").to_json %>

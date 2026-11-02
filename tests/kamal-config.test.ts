@@ -7,7 +7,13 @@ import { projectEnv, repoRoot, runScript, tempDir } from './support.ts'
 
 // Renders a Kamal config file the way Kamal does (ERB, then YAML) and returns it as JSON.
 function renderKamalConfig(file: string, env: Record<string, string | undefined> = {}) {
-  const result = spawnSync(
+  const result = spawnRender(file, env)
+  expect(result.status, result.stderr).toBe(0)
+  return JSON.parse(result.stdout)
+}
+
+function spawnRender(file: string, env: Record<string, string | undefined>) {
+  return spawnSync(
     'ruby',
     ['-rerb', '-ryaml', '-rjson', '-e', 'puts JSON.generate(YAML.load(ERB.new(File.read(ARGV[0])).result))', file],
     {
@@ -16,6 +22,7 @@ function renderKamalConfig(file: string, env: Record<string, string | undefined>
         ...process.env,
         DEV_HOST: 'dev-host.invalid',
         PROD_VPN_IP: 'prod-host.invalid',
+        PROD_SRV_VPN_IP: 'srv-host.invalid',
         ECR_REGISTRY: 'registry.invalid',
         GOOGLE_CLIENT_ID: 'client-id.apps.example.test',
         OAUTH_CLIENT_ID: 'web-client-uid',
@@ -25,8 +32,6 @@ function renderKamalConfig(file: string, env: Record<string, string | undefined>
       encoding: 'utf8',
     },
   )
-  expect(result.status, result.stderr).toBe(0)
-  return JSON.parse(result.stdout)
 }
 
 function preflightOutputs(): Record<string, string> {
@@ -108,12 +113,51 @@ describe('Kamal prod config', () => {
   })
 })
 
+// target=srv: the same promoted image on the shared srv host, behind its external TLS terminator.
+describe('Kamal prod config on the srv host', () => {
+  const { PROJECT_NAME: name, PROJECT_ZONE: zone } = projectEnv()
+  const srv = renderKamalConfig('config/deploy.prod-srv.yml')
+
+  it('points only at the srv host, as the srv prod user', () => {
+    expect(srv.servers.web.hosts).toEqual(['srv-host.invalid'])
+    expect(srv.ssh.user).toBe(`${name}-prod`)
+  })
+
+  it('runs the promoted prod service under names distinct from dev and the other deployment', () => {
+    expect(srv.service).toBe(`${name}-fe`)
+    const containerPrefix = `${srv.service}-web-prod-srv`
+    expect(containerPrefix.startsWith(`${name}-fe-dev`)).toBe(false)
+    expect(containerPrefix.startsWith(`${name}-srv`)).toBe(false)
+  })
+
+  it('leaves TLS to the external terminator and joins the shared proxy on its ports', () => {
+    expect(srv.proxy).toEqual({
+      ssl: false,
+      host: `app.${zone}`,
+      forward_headers: true,
+      run: { http_port: 8091, https_port: 8491 },
+    })
+    const lib = readFileSync(join(repoRoot, 'deploy', 'lib.sh'), 'utf8')
+    expect(lib).toMatch(new RegExp(`^PROXY_HTTP_PORT=${srv.proxy.run.http_port}$`, 'm'))
+  })
+
+  it('serves the URL the srv scripts wait on, with the prod app environment', () => {
+    expect(`http://${srv.proxy.host}`).toBe(destinationUrl('prod-srv'))
+    expect(srv.env.clear).toEqual(renderKamalConfig('config/deploy.prod.yml').env.clear)
+  })
+
+  it('never falls back to the AWS host', () => {
+    const result = spawnRender('config/deploy.prod-srv.yml', { PROD_SRV_VPN_IP: undefined })
+    expect(result.status).not.toBe(0)
+  })
+})
+
 describe.each([
   ['GOOGLE_CLIENT_ID', 'client-id.apps.example.test'],
   ['OAUTH_CLIENT_ID', 'web-client-uid'],
   ['SUPPORT_EMAIL', 'support@example.test'],
 ])('%s', (variable, value) => {
-  it.each(['config/deploy.dev.yml', 'config/deploy.prod.yml'])(
+  it.each(['config/deploy.dev.yml', 'config/deploy.prod.yml', 'config/deploy.prod-srv.yml'])(
     '%s passes the deploy environment value to the app as a public value',
     (file) => {
       const config = renderKamalConfig(file)
